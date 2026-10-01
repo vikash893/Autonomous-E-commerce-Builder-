@@ -77,7 +77,11 @@ function Header() {
           aria-expanded={menuOpen}
           aria-controls="main-navigation"
         >
-          {menuOpen ? '✕' : '☰'}
+          <span className="menu-icon" aria-hidden="true">
+            <i />
+            <i />
+            <i />
+          </span>
         </button>
 
         <nav

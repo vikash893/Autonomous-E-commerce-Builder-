@@ -25,5 +25,5 @@ button, a { -webkit-tap-highlight-color: transparent; }
 a { color: inherit; }
 button { color: inherit; }
 img { display: block; max-width: 100%; }
-#root { min-height: 100vh; }
+#root { min-height: 100vh; display: flex; flex-direction: column; }
 ::selection { background: var(--lime); color: var(--ink); }
