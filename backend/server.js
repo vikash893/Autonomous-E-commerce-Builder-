@@ -8,6 +8,9 @@ const authRoutes = require("./routes/authRoutes");
 const userRoutes = require("./routes/userRoutes");
 const projectRoutes = require("./routes/projectRoutes");
 const adminRoutes = require("./routes/adminRoutes");
+const moduleRoutes = require("./routes/moduleRoutes");
+const buildRoutes = require("./routes/buildRoutes");
+const generateRoutes = require("./routes/generateRoutes");
 
 const app = express();
 
@@ -47,6 +50,10 @@ app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/projects", projectRoutes);
 app.use("/api/admin", adminRoutes);
+app.use("/api/v1/auth", authRoutes);
+app.use("/api/v1/modules", moduleRoutes);
+app.use("/api/v1/builds", buildRoutes);
+app.use("/api/v1/generate", generateRoutes);
 
 // ===============================
 // 404

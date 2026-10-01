@@ -1,6 +1,7 @@
 // API client helper for Autonomous E-Commerce Builder
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
+const BUILDER_API_BASE_URL = import.meta.env.VITE_BUILDER_API_URL || '/api/v1';
 
 export const getToken = () => {
   return localStorage.getItem('forma_auth_token') || null;
@@ -70,6 +71,112 @@ export async function request(endpoint, options = {}) {
   } catch (error) {
     throw error;
   }
+}
+
+async function builderRequest(endpoint, options = {}) {
+  const headers = {
+    'Content-Type': 'application/json',
+    ...(options.headers || {}),
+  };
+  const token = getToken();
+
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
+  const url = `${BUILDER_API_BASE_URL}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
+  const response = await fetch(url, { ...options, headers });
+  const data = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    throw new Error(data.error?.message || data.error || data.message || `Request failed with status ${response.status}`);
+  }
+
+  return data;
+}
+
+async function builderDownload(endpoint, body, fallbackName) {
+  const headers = { 'Content-Type': 'application/json' };
+  const token = getToken();
+
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
+  const response = await fetch(`${BUILDER_API_BASE_URL}${endpoint}`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(data.error?.message || data.error || data.message || `Request failed with status ${response.status}`);
+  }
+
+  const blob = await response.blob();
+  const disposition = response.headers.get('Content-Disposition') || '';
+  const filename = disposition.match(/filename="?([^";]+)"?/i)?.[1] || fallbackName;
+  const objectUrl = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = objectUrl;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(objectUrl);
+}
+
+// ============================================
+// BUILDER API
+// ============================================
+
+export async function getModuleCatalogue() {
+  return builderRequest('/modules');
+}
+
+export async function resolveBlueprint(modules, options = {}) {
+  return builderRequest('/builds/resolve', {
+    method: 'POST',
+    body: JSON.stringify({ modules, options }),
+  });
+}
+
+export async function saveBuild(build) {
+  return builderRequest('/builds', {
+    method: 'POST',
+    body: JSON.stringify(build),
+  });
+}
+
+export async function getMyBuilds(params = {}) {
+  const query = new URLSearchParams(params).toString();
+  return builderRequest(`/builds/mine${query ? `?${query}` : ''}`);
+}
+
+export async function getBuildById(id) {
+  return builderRequest(`/builds/${encodeURIComponent(id)}`);
+}
+
+export async function updateBuild(id, build) {
+  return builderRequest(`/builds/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    body: JSON.stringify(build),
+  });
+}
+
+export async function deleteBuild(id) {
+  return builderRequest(`/builds/${encodeURIComponent(id)}`, { method: 'DELETE' });
+}
+
+export async function generateAndDownloadZip(blueprint) {
+  const filename = `${(blueprint.storeName || 'generated-store').trim().replace(/[^a-z0-9]+/gi, '-').toLowerCase()}.zip`;
+  return builderDownload('/generate', blueprint, filename);
+}
+
+export async function getAdminBuilds(params = {}) {
+  const query = new URLSearchParams(params).toString();
+  return builderRequest(`/admin/builds${query ? `?${query}` : ''}`);
 }
 
 // ============================================
