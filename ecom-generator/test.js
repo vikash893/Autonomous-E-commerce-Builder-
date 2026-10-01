@@ -6,6 +6,22 @@ const path = require('path');
 const { resolve, assertNoCycles } = require('./src/resolve');
 const { generate } = require('./src/generate');
 
+const crypto = require('crypto');
+const os = require('os');
+
+const getFiles = (dir) => {
+  let results = [];
+  for (const file of fs.readdirSync(dir)) {
+    const fullPath = path.join(dir, file);
+    if (fs.statSync(fullPath).isDirectory()) {
+      results = results.concat(getFiles(fullPath));
+    } else {
+      results.push(fullPath);
+    }
+  }
+  return results;
+};
+
 (async () => {
   assertNoCycles();
 
@@ -21,7 +37,15 @@ const { generate } = require('./src/generate');
   const bp = { storeName: 'Bloom Boutique', modules: ['products', 'auth'], options: { products: { variants: true, categories: true } } };
   const a = await generate(bp);
   const b = await generate(bp);
-  const sha = (g) => execSync(`cd ${g.outDir} && find . -type f | sort | xargs cat | sha256sum`).toString();
+  const sha = (g) => {
+    const files = getFiles(g.outDir).sort();
+    const hash = crypto.createHash('sha256');
+    for (const f of files) {
+      hash.update(path.relative(g.outDir, f));
+      hash.update(fs.readFileSync(f));
+    }
+    return hash.digest('hex');
+  };
   assert.strictEqual(sha(a), sha(b), 'same config must give same output');
   console.log('deterministic: OK; files:', a.files.length);
 
@@ -35,7 +59,10 @@ const { generate } = require('./src/generate');
   const idx = fs.readFileSync(path.join(a.outDir, 'server/index.js'), 'utf8');
   assert.ok(idx.includes("/api/v1/products") && idx.includes('/api/v1/auth') && !idx.includes('@mount-routes'));
   console.log(fs.readFileSync(path.join(a.outDir, '.env.example'), 'utf8'));
-  execSync(`cd ${a.outDir}/server && for f in $(find . -name '*.js'); do node --check $f; done`);
+  const serverFiles = getFiles(path.join(a.outDir, 'server')).filter((f) => f.endsWith('.js'));
+  for (const f of serverFiles) {
+    execSync(`node --check "${f}"`);
+  }
   console.log('server syntax: OK');
 
   // 4. Invalid combo / failure leaves no temp dir
@@ -57,8 +84,9 @@ const { generate } = require('./src/generate');
   assert.strictEqual(gen.status, 201);
   const zip = await call('GET', genJson.data.downloadUrl);
   assert.strictEqual(zip.headers['content-type'], 'application/zip');
-  fs.writeFileSync('/tmp/zip-test.zip', zip.buf);
-  console.log('zip bytes:', zip.buf.length, execSync('unzip -l /tmp/zip-test.zip | tail -1').toString().trim());
+  const tmpZip = path.join(os.tmpdir(), 'zip-test.zip');
+  fs.writeFileSync(tmpZip, zip.buf);
+  console.log('zip bytes:', zip.buf.length);
   const bad = await call('POST', '/api/v1/generate', { storeName: 'Q', modules: [] });
   assert.strictEqual(bad.status, 400);
   console.log('validation error shape:', JSON.parse(bad.buf).error.code);

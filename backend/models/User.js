@@ -1,22 +1,29 @@
 const mongoose = require("mongoose");
 
-const connectDB = async () => {
-    try {
-        const connection = await mongoose.connect(
-            process.env.MONGO_URI
-        );
+const userSchema = new mongoose.Schema(
+    {
+        name: {
+            type: String,
+            required: true,
+            trim: true
+        },
+        email: {
+            type: String,
+            required: true,
+            unique: true,
+            lowercase: true
+        },
+        password: {
+            type: String,
+            required: true
+        },
+        role: {
+            type: String,
+            enum: ["USER", "ADMIN"],
+            default: "USER"
+        }
+    },
+    { timestamps: true }
+);
 
-        console.log(
-            `MongoDB connected: ${connection.connection.host}`
-        );
-    } catch (error) {
-        console.error(
-            "MongoDB connection error:",
-            error.message
-        );
-
-        process.exit(1);
-    }
-};
-
-module.exports = connectDB;
+module.exports = mongoose.model("User", userSchema);

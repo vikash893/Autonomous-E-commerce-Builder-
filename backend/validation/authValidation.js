@@ -1,28 +1,35 @@
-const validate = (schema) => {
-    return (req, res, next) => {
-        const result = schema.safeParse({
-            body: req.body,
-            params: req.params,
-            query: req.query
-        });
+const { z } = require("zod");
 
-        if (!result.success) {
-            return res.status(400).json({
-                success: false,
-                message: "Validation failed",
-                errors: result.error.issues.map((issue) => ({
-                    field: issue.path.join("."),
-                    message: issue.message
-                }))
-            });
-        }
+// POST /api/auth/register
+const registerSchema = z.object({
+    body: z.object({
+        name: z
+            .string({ required_error: "Name is required" })
+            .min(2, "Name must be at least 2 characters")
+            .max(60, "Name must be at most 60 characters"),
+        email: z
+            .string({ required_error: "Email is required" })
+            .email("Invalid email address"),
+        password: z
+            .string({ required_error: "Password is required" })
+            .min(6, "Password must be at least 6 characters")
+    }),
+    params: z.object({}).optional(),
+    query: z.object({}).optional()
+});
 
-        req.body = result.data.body;
-        req.params = result.data.params;
-        req.query = result.data.query;
+// POST /api/auth/login
+const loginSchema = z.object({
+    body: z.object({
+        email: z
+            .string({ required_error: "Email is required" })
+            .email("Invalid email address"),
+        password: z
+            .string({ required_error: "Password is required" })
+            .min(1, "Password is required")
+    }),
+    params: z.object({}).optional(),
+    query: z.object({}).optional()
+});
 
-        next();
-    };
-};
-
-module.exports = validate;
+module.exports = { registerSchema, loginSchema };
