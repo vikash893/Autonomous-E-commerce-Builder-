@@ -1,7 +1,7 @@
 // API client helper for Autonomous E-Commerce Builder
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
-const BUILDER_API_BASE_URL = import.meta.env.VITE_BUILDER_API_URL || '/api/v1';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://autonomous-e-commerce-builder.onrender.com/api';
+const BUILDER_API_BASE_URL = import.meta.env.VITE_BUILDER_API_URL || 'https://autonomous-e-commerce-builder.onrender.com/api/v1';
 
 export const getToken = () => {
   return localStorage.getItem('forma_auth_token') || null;
