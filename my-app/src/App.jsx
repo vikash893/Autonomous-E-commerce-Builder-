@@ -1,4 +1,6 @@
 import { BrowserRouter, Route, Routes } from 'react-router-dom'
+import { AuthProvider } from './context/AuthContext.jsx'
+import { ProtectedRoute, PublicOnlyRoute } from './components/ProtectedRoute.jsx'
 import SiteLayout from './components/SiteLayout.jsx'
 import AboutPage from './pages/AboutPage.jsx'
 import ContactPage from './pages/ContactPage.jsx'
@@ -10,18 +12,41 @@ import './App.css'
 
 function App() {
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route element={<SiteLayout />}>
-          <Route path="/" element={<HomePage />} />
-          <Route path="/about" element={<AboutPage />} />
-          <Route path="/contact" element={<ContactPage />} />
-          <Route path="/dashboard" element={<DashboardPage />} />
-        </Route>
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/register" element={<RegisterPage />} />
-      </Routes>
-    </BrowserRouter>
+    <AuthProvider>
+      <BrowserRouter>
+        <Routes>
+          <Route element={<SiteLayout />}>
+            <Route path="/" element={<HomePage />} />
+            <Route path="/about" element={<AboutPage />} />
+            <Route path="/contact" element={<ContactPage />} />
+            <Route
+              path="/dashboard"
+              element={
+                <ProtectedRoute>
+                  <DashboardPage />
+                </ProtectedRoute>
+              }
+            />
+          </Route>
+          <Route
+            path="/login"
+            element={
+              <PublicOnlyRoute>
+                <LoginPage />
+              </PublicOnlyRoute>
+            }
+          />
+          <Route
+            path="/register"
+            element={
+              <PublicOnlyRoute>
+                <RegisterPage />
+              </PublicOnlyRoute>
+            }
+          />
+        </Routes>
+      </BrowserRouter>
+    </AuthProvider>
   )
 }
 

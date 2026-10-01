@@ -1,16 +1,19 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { useAuth } from '../context/AuthContext.jsx'
 import { AuthBrand } from './SiteLayout.jsx'
 
 function AuthForm({ mode }) {
   const isRegister = mode === 'register'
   const navigate = useNavigate()
+  const { login, register } = useAuth()
 
   const [formData, setFormData] = useState({
     name: '',
     email: '',
     password: '',
     confirmPassword: '',
+    role: 'USER',
     remember: false,
   })
 
@@ -36,8 +39,8 @@ function AuthForm({ mode }) {
   function validateForm() {
     const email = formData.email.trim()
 
-    if (isRegister && !formData.name.trim()) {
-      return 'Please enter your name.'
+    if (isRegister && (!formData.name || formData.name.trim().length < 2)) {
+      return 'Please enter your full name (at least 2 characters).'
     }
 
     if (!email) {
@@ -48,8 +51,8 @@ function AuthForm({ mode }) {
       return 'Please enter a valid email address.'
     }
 
-    if (formData.password.length < 8) {
-      return 'Password must be at least 8 characters.'
+    if (formData.password.length < 6) {
+      return 'Password must be at least 6 characters.'
     }
 
     if (isRegister && formData.password !== formData.confirmPassword) {
@@ -75,46 +78,24 @@ function AuthForm({ mode }) {
     setLoading(true)
 
     try {
-      const endpoint = isRegister
-        ? 'http://localhost:8000/api/auth/register'
-        : 'http://localhost:8000/api/auth/login'
-
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          name: formData.name,
-          email: formData.email,
-          password: formData.password,
-        }),
-      })
-
-      const data = await response.json()
-
-      if (!response.ok) {
-        throw new Error(data.error || data.message || 'Authentication failed.')
-      }
-
       if (isRegister) {
-        setMessage('Account created successfully. Redirecting to login...')
-
-        setTimeout(() => {
-          navigate('/login')
-        }, 1000)
+        await register(
+          formData.name.trim(),
+          formData.email.trim(),
+          formData.password,
+          formData.role
+        )
+        setMessage('Account created successfully! Redirecting to dashboard...')
       } else {
-        // Store JWT token from login response
-        localStorage.setItem('token', data.token)
-
-        setMessage('Login successful. Welcome back!')
-
-        setTimeout(() => {
-          navigate('/dashboard')
-        }, 1000)
+        await login(formData.email.trim(), formData.password)
+        setMessage('Login successful! Redirecting to dashboard...')
       }
+
+      setTimeout(() => {
+        navigate('/dashboard')
+      }, 600)
     } catch (err) {
-      setError(err.message || 'Something went wrong. Please try again.')
+      setError(err.message || 'Authentication failed. Please check your credentials.')
     } finally {
       setLoading(false)
     }
@@ -210,8 +191,8 @@ function AuthForm({ mode }) {
                   autoComplete={
                     isRegister ? 'new-password' : 'current-password'
                   }
-                  placeholder="At least 8 characters"
-                  minLength="8"
+                  placeholder="At least 6 characters"
+                  minLength="6"
                   value={formData.password}
                   onChange={handleChange}
                   required
@@ -238,7 +219,7 @@ function AuthForm({ mode }) {
                     type={showConfirmPassword ? 'text' : 'password'}
                     autoComplete="new-password"
                     placeholder="Re-enter your password"
-                    minLength="8"
+                    minLength="6"
                     value={formData.confirmPassword}
                     onChange={handleChange}
                     required
@@ -271,10 +252,6 @@ function AuthForm({ mode }) {
                   />{' '}
                   Remember me
                 </label>
-
-                <a href="#forgot" className="forgot-link">
-                  Forgot password?
-                </a>
               </div>
             )}
 
@@ -297,14 +274,18 @@ function AuthForm({ mode }) {
               <p
                 className="form-message"
                 role="alert"
-                style={{ color: '#c62828' }}
+                style={{ color: '#e53935', backgroundColor: '#ffebee', padding: '0.75rem', borderRadius: '6px' }}
               >
                 {error}
               </p>
             )}
 
             {message && (
-              <p className="form-message" role="status">
+              <p 
+                className="form-message" 
+                role="status"
+                style={{ color: '#2e7d32', backgroundColor: '#e8f5e9', padding: '0.75rem', borderRadius: '6px' }}
+              >
                 {message}
               </p>
             )}

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
+import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { useAuth } from '../context/AuthContext.jsx'
 
 function Brand({ light = false }) {
   return (
@@ -24,6 +25,8 @@ function Brand({ light = false }) {
 function Header() {
   const [menuOpen, setMenuOpen] = useState(false)
   const location = useLocation()
+  const navigate = useNavigate()
+  const { user, isAuthenticated, isAdmin, logout } = useAuth()
 
   // Close the mobile menu whenever the route changes
   useEffect(() => {
@@ -53,6 +56,12 @@ function Header() {
 
   function closeMenu() {
     setMenuOpen(false)
+  }
+
+  function handleLogout() {
+    closeMenu()
+    logout()
+    navigate('/login')
   }
 
   return (
@@ -85,27 +94,60 @@ function Header() {
           <NavLink to="/contact" onClick={closeMenu}>
             Contact
           </NavLink>
-          <NavLink to="/dashboard" onClick={closeMenu}>
-            Dashboard
-          </NavLink>
+          {isAuthenticated && (
+            <NavLink to="/dashboard" onClick={closeMenu}>
+              Dashboard
+            </NavLink>
+          )}
         </nav>
 
         <div className="header-actions">
-          <Link
-            className="login-link"
-            to="/login"
-            onClick={closeMenu}
-          >
-            Log in
-          </Link>
+          {isAuthenticated ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+              <span style={{ fontSize: '12px', fontWeight: '600', color: 'var(--ink)' }}>
+                {user?.name}
+                {isAdmin && (
+                  <span style={{ 
+                    marginLeft: '6px', 
+                    padding: '2px 6px', 
+                    fontSize: '9px', 
+                    fontWeight: '700', 
+                    background: '#e0f2fe', 
+                    color: '#0369a1', 
+                    borderRadius: '4px' 
+                  }}>
+                    ADMIN
+                  </span>
+                )}
+              </span>
+              <button
+                className="button button-small button-quiet"
+                style={{ border: '1px solid var(--line)', padding: '0 12px' }}
+                type="button"
+                onClick={handleLogout}
+              >
+                Log out
+              </button>
+            </div>
+          ) : (
+            <>
+              <Link
+                className="login-link"
+                to="/login"
+                onClick={closeMenu}
+              >
+                Log in
+              </Link>
 
-          <Link
-            className="button button-small button-dark"
-            to="/register"
-            onClick={closeMenu}
-          >
-            Get started <span aria-hidden="true">↗</span>
-          </Link>
+              <Link
+                className="button button-small button-dark"
+                to="/register"
+                onClick={closeMenu}
+              >
+                Get started <span aria-hidden="true">↗</span>
+              </Link>
+            </>
+          )}
         </div>
       </div>
     </header>
