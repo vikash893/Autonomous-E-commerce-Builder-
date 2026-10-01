@@ -1,0 +1,43 @@
+const router = require('express').Router();
+const Product = require('../models/Product');
+<% if (has('auth')) { %>const { protect, adminOnly } = require('../middlewares/auth');
+<% } %>
+const fail = (status, code, message) => Object.assign(new Error(message), { status, code });
+const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+router.get('/', async (req, res, next) => {
+  try {
+    const page = Math.max(+req.query.page || 1, 1);
+    const limit = Math.min(+req.query.limit || 20, 100);
+    const filter = req.query.search ? { name: new RegExp(escapeRegex(String(req.query.search)), 'i') } : {};
+<% if (opts.products.categories) { %>    if (req.query.category) filter.category = String(req.query.category);
+<% } %>    const [items, total] = await Promise.all([
+      Product.find(filter).sort('-createdAt').skip((page - 1) * limit).limit(limit),
+      Product.countDocuments(filter),
+    ]);
+    res.json({ success: true, data: { items, page, limit, total, totalPages: Math.ceil(total / limit) } });
+  } catch (e) { next(e); }
+});
+
+router.get('/:id', async (req, res, next) => {
+  try {
+    const product = await Product.findById(req.params.id);
+    if (!product) throw fail(404, 'NOT_FOUND', 'Product not found');
+    res.json({ success: true, data: product });
+  } catch (e) { next(e); }
+});
+
+router.post('/'<% if (has('auth')) { %>, protect, adminOnly<% } %>, async (req, res, next) => {
+  try {
+    res.status(201).json({ success: true, data: await Product.create(req.body) });
+  } catch (e) { next(e.name === 'ValidationError' ? fail(400, 'VALIDATION_ERROR', e.message) : e); }
+});
+
+router.delete('/:id'<% if (has('auth')) { %>, protect, adminOnly<% } %>, async (req, res, next) => {
+  try {
+    await Product.findByIdAndDelete(req.params.id);
+    res.json({ success: true, message: 'Deleted' });
+  } catch (e) { next(e); }
+});
+
+module.exports = router;
