@@ -1,0 +1,184 @@
+import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
+import { request } from '../api';
+
+export default function Wishlist() {
+  const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [alertMsg, setAlertMsg] = useState('');
+
+  const loadWishlist = () => {
+    setLoading(true);
+    request('/wishlist')
+      .then((data) => {
+        setProducts(Array.isArray(data?.products) ? data.products : []);
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    setIsLoggedIn(Boolean(token));
+    loadWishlist();
+  }, []);
+
+  const removeFromWishlist = async (productId) => {
+    try {
+      await request(`/wishlist/toggle/${productId}`, { method: 'POST' });
+      setProducts(products.filter((p) => p._id !== productId));
+    } catch (err) {
+      alert('Error updating wishlist: ' + err.message);
+    }
+  };
+
+  const addToCart = (product) => {
+    try {
+      const saved = localStorage.getItem('guest_cart');
+      let cart = saved ? JSON.parse(saved) : [];
+      const existing = cart.find((i) => i._id === product._id);
+      if (existing) {
+        existing.qty = (existing.qty || 1) + 1;
+      } else {
+        cart.push({ ...product, qty: 1 });
+      }
+      localStorage.setItem('guest_cart', JSON.stringify(cart));
+      setAlertMsg(`Moved "${product.name}" to cart!`);
+      setTimeout(() => setAlertMsg(''), 2500);
+    } catch {
+      alert('Error adding to cart');
+    }
+  };
+
+  return (
+    <div style={{ maxWidth: '960px', margin: '40px auto', padding: '0 20px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+        <div>
+          <h1 style={{ fontSize: '28px', margin: 0, color: '#0f172a' }}>My Wishlist</h1>
+          <p style={{ margin: '4px 0 0', color: '#64748b', fontSize: '14px' }}>Items you've saved for later</p>
+        </div>
+        <Link to="/" style={{ color: '<%= theme.primary %>', textDecoration: 'none', fontWeight: 600 }}>
+          ← Back to Catalog
+        </Link>
+      </div>
+
+      {!isLoggedIn && (
+        <div style={{ padding: '16px', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '8px', marginBottom: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <strong>Sign in required:</strong> Log in to sync and persist your wishlist across devices.
+          </div>
+          <Link to="/login" style={{ padding: '6px 14px', background: '<%= theme.primary %>', color: '#fff', borderRadius: '4px', textDecoration: 'none', fontSize: '13px', fontWeight: 500 }}>
+            Log In
+          </Link>
+        </div>
+      )}
+
+      {alertMsg && (
+        <div style={{ padding: '12px', background: '#dcfce7', color: '#15803d', borderRadius: '6px', marginBottom: '20px', display: 'flex', justifyContent: 'space-between' }}>
+          <span>✓ {alertMsg}</span>
+          <Link to="/cart" style={{ fontWeight: 600, color: '#15803d' }}>View Cart →</Link>
+        </div>
+      )}
+
+      {loading ? (
+        <p style={{ textAlign: 'center', padding: '40px', color: '#64748b' }}>Loading wishlist...</p>
+      ) : products.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: '60px 20px', background: '#f8fafc', borderRadius: '12px', border: '1px dashed #cbd5e1' }}>
+          <span style={{ fontSize: '48px', display: 'block', marginBottom: '12px' }}>❤️</span>
+          <h2 style={{ fontSize: '20px', color: '#334155', margin: '0 0 8px 0' }}>Your wishlist is empty</h2>
+          <p style={{ color: '#64748b', margin: '0 0 20px 0' }}>Explore our catalog and click the heart icon on any product to save it here.</p>
+          <Link
+            to="/"
+            style={{
+              display: 'inline-block',
+              padding: '10px 20px',
+              background: '<%= theme.primary %>',
+              color: '#fff',
+              textDecoration: 'none',
+              borderRadius: '6px',
+              fontWeight: 600,
+            }}
+          >
+            Browse Products →
+          </Link>
+        </div>
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '20px' }}>
+          {products.map((p) => (
+            <div
+              key={p._id}
+              style={{
+                border: '1px solid #e2e8f0',
+                borderRadius: '10px',
+                background: '#fff',
+                padding: '16px',
+                display: 'flex',
+                flexDirection: 'column',
+              }}
+            >
+              <div style={{ height: '120px', background: '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '40px', borderRadius: '6px', marginBottom: '12px' }}>
+                📦
+              </div>
+              <h3 style={{ margin: '0 0 4px 0', fontSize: '15px', color: '#0f172a' }}>{p.name}</h3>
+              <p style={{ margin: '0 0 12px 0', fontSize: '16px', fontWeight: 'bold', color: '<%= theme.primary %>' }}>
+                <%= currency %>{p.price}
+              </p>
+
+              <div style={{ marginTop: 'auto', display: 'grid', gap: '6px' }}>
+                <button
+                  type="button"
+                  onClick={() => addToCart(p)}
+                  style={{
+                    padding: '8px',
+                    background: '<%= theme.primary %>',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: '6px',
+                    fontSize: '13px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Move to Cart
+                </button>
+                <div style={{ display: 'flex', gap: '6px' }}>
+                  <Link
+                    to={`/products/${p._id}`}
+                    style={{
+                      flex: 1,
+                      textAlign: 'center',
+                      padding: '6px',
+                      background: '#f1f5f9',
+                      color: '#475569',
+                      borderRadius: '4px',
+                      textDecoration: 'none',
+                      fontSize: '12px',
+                    }}
+                  >
+                    View
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={() => removeFromWishlist(p._id)}
+                    style={{
+                      padding: '6px 12px',
+                      background: '#fee2e2',
+                      color: '#dc2626',
+                      border: 'none',
+                      borderRadius: '4px',
+                      fontSize: '12px',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Remove
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}

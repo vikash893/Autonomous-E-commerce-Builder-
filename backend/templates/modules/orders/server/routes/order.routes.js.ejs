@@ -1,0 +1,135 @@
+const express = require('express');
+const jwt = require('jsonwebtoken');
+const mongoose = require('mongoose');
+const Order = require('../models/Order');
+
+const router = express.Router();
+
+const getAuthUser = (req) => {
+  const header = req.headers.authorization || '';
+  if (!header.startsWith('Bearer ')) return null;
+  try {
+    return jwt.verify(header.slice(7), process.env.JWT_SECRET || 'secret');
+  } catch {
+    return null;
+  }
+};
+
+router.get('/', async (req, res, next) => {
+  try {
+    const orders = await Order.find().populate('items.product').sort({ createdAt: -1 });
+    return res.json({ success: true, data: orders });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get('/my-orders', async (req, res, next) => {
+  try {
+    const authUser = getAuthUser(req);
+    const userId = authUser?.id || authUser?._id || authUser?.userId;
+    const conditions = [];
+    if (userId && mongoose.Types.ObjectId.isValid(userId)) {
+      conditions.push({ user: new mongoose.Types.ObjectId(userId) });
+    }
+    if (authUser?.email) {
+      conditions.push({ customerEmail: String(authUser.email).trim().toLowerCase() });
+    }
+    if (conditions.length === 0) return res.json({ success: true, data: [] });
+
+    const orders = await Order.find({ $or: conditions })
+      .populate('items.product')
+      .sort({ createdAt: -1 });
+    return res.json({ success: true, data: orders });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/', async (req, res, next) => {
+  try {
+<% if (has('payments')) { %>
+    return res.status(402).json({ success: false, error: 'Complete payment before creating an order' });
+<% } else { %>
+    const authUser = getAuthUser(req);
+    const { customerName, customerEmail, shippingAddress, items, totalAmount } = req.body;
+    const userId = authUser?.id || authUser?._id || authUser?.userId;
+
+    if (!String(customerName || '').trim() || !String(customerEmail || '').trim() || !String(shippingAddress || '').trim()) {
+      return res.status(400).json({ success: false, error: 'Customer and shipping details are required' });
+    }
+    if (!Array.isArray(items) || items.length === 0 || !Number.isFinite(Number(totalAmount)) || Number(totalAmount) < 0) {
+      return res.status(400).json({ success: false, error: 'A valid order total and at least one item are required' });
+    }
+
+    const order = await Order.create({
+      user: userId && mongoose.Types.ObjectId.isValid(userId) ? userId : undefined,
+      customerName: String(customerName).trim(),
+      customerEmail: String(customerEmail).trim().toLowerCase(),
+      shippingAddress: String(shippingAddress).trim(),
+      items,
+      totalAmount: Number(totalAmount),
+      status: 'PENDING',
+      paymentStatus: 'PENDING',
+    });
+    return res.status(201).json({ success: true, message: 'Order created successfully', data: order });
+<% } %>
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.patch('/:id/status', async (req, res, next) => {
+  try {
+    const { status, paymentStatus } = req.body;
+<% if (has('payments')) { %>
+    if (paymentStatus) {
+      return res.status(403).json({ success: false, error: 'Payment status can only be changed by payment verification' });
+    }
+<% } %>
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ success: false, error: 'Invalid order ID' });
+    }
+    const updateData = {};
+    if (status) updateData.status = String(status).toUpperCase();
+  <% if (!has('payments')) { %>
+    if (paymentStatus) updateData.paymentStatus = String(paymentStatus).toUpperCase();
+  <% } %>
+    if (!updateData.status && !updateData.paymentStatus) {
+      return res.status(400).json({ success: false, error: 'Status or paymentStatus is required' });
+    }
+    const order = await Order.findByIdAndUpdate(req.params.id, updateData, { new: true, runValidators: true });
+    if (!order) return res.status(404).json({ success: false, error: 'Order not found' });
+    return res.json({ success: true, data: order, message: `Order status updated to ${order.status}` });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get('/:id', async (req, res, next) => {
+  try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ success: false, error: 'Invalid order ID' });
+    }
+    const order = await Order.findById(req.params.id).populate('items.product');
+    if (!order) return res.status(404).json({ success: false, error: 'Order not found' });
+    return res.json({ success: true, data: order });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.delete('/:id', async (req, res, next) => {
+  try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ success: false, error: 'Invalid order ID' });
+    }
+    const order = await Order.findByIdAndDelete(req.params.id);
+    if (!order) return res.status(404).json({ success: false, error: 'Order not found' });
+    return res.json({ success: true, message: 'Order removed successfully' });
+  } catch (err) {
+    next(err);
+  }
+});
+
+module.exports = router;

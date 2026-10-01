@@ -1,0 +1,285 @@
+import { useState, useEffect } from 'react';
+import { useParams, Link, useNavigate } from 'react-router-dom';
+import { request } from '../api';
+
+export default function ProductDetail() {
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const [product, setProduct] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [qty, setQty] = useState(1);
+  const [addedNotice, setAddedNotice] = useState(false);
+<% if (has('reviews')) { %>
+  const [reviews, setReviews] = useState([]);
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewComment, setReviewComment] = useState('');
+  const [submittingReview, setSubmittingReview] = useState(false);
+<% } %>
+<% if (has('wishlist')) { %>
+  const [inWishlist, setInWishlist] = useState(false);
+  const [wishlistLoading, setWishlistLoading] = useState(false);
+<% } %>
+
+  useEffect(() => {
+    setLoading(true);
+    request(`/products/${id}`)
+      .then((data) => {
+        setProduct(data);
+        setLoading(false);
+      })
+      .catch((err) => {
+        setError(err.message);
+        setLoading(false);
+      });
+
+<% if (has('reviews')) { %>
+    request(`/reviews/product/${id}`)
+      .then((data) => setReviews(Array.isArray(data) ? data : []))
+      .catch(() => {});
+<% } %>
+
+<% if (has('wishlist')) { %>
+    request('/wishlist')
+      .then((data) => {
+        const prods = data?.products || [];
+        setInWishlist(prods.some((p) => (p._id || p) === id));
+      })
+      .catch(() => {});
+<% } %>
+  }, [id]);
+
+  const addToCart = () => {
+    if (!product) return;
+    try {
+      const saved = localStorage.getItem('guest_cart');
+      let cart = saved ? JSON.parse(saved) : [];
+      const existing = cart.find((i) => i._id === product._id);
+      if (existing) {
+        existing.qty = (existing.qty || 1) + qty;
+      } else {
+        cart.push({ ...product, qty });
+      }
+      localStorage.setItem('guest_cart', JSON.stringify(cart));
+      setAddedNotice(true);
+      setTimeout(() => setAddedNotice(false), 2500);
+    } catch (err) {
+      alert('Failed to update cart: ' + err.message);
+    }
+  };
+
+<% if (has('wishlist')) { %>
+  const toggleWishlist = async () => {
+    setWishlistLoading(true);
+    try {
+      await request(`/wishlist/toggle/${id}`, { method: 'POST' });
+      setInWishlist(!inWishlist);
+    } catch (err) {
+      alert(err.message || 'Please log in to use wishlist');
+    } finally {
+      setWishlistLoading(false);
+    }
+  };
+<% } %>
+
+<% if (has('reviews')) { %>
+  const handleReviewSubmit = async (e) => {
+    e.preventDefault();
+    if (!reviewComment.trim()) return;
+    setSubmittingReview(true);
+    try {
+      const newRev = await request(`/reviews/product/${id}`, {
+        method: 'POST',
+        body: JSON.stringify({ rating: reviewRating, comment: reviewComment }),
+      });
+      setReviews([newRev, ...reviews]);
+      setReviewComment('');
+      setReviewRating(5);
+    } catch (err) {
+      alert('Review error: ' + err.message);
+    } finally {
+      setSubmittingReview(false);
+    }
+  };
+<% } %>
+
+  if (loading) return <div style={{ padding: '40px', textAlign: 'center' }}>Loading product details...</div>;
+  if (error || !product) {
+    return (
+      <div style={{ padding: '40px', textAlign: 'center' }}>
+        <h2>Product not found</h2>
+        <p>{error || 'This item may have been removed.'}</p>
+        <Link to="/" style={{ color: '<%= theme.primary %>' }}>← Back to Products</Link>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ maxWidth: '960px', margin: '40px auto', padding: '0 20px' }}>
+      <Link to="/" style={{ color: '<%= theme.primary %>', textDecoration: 'none', display: 'inline-block', marginBottom: '20px' }}>
+        ← Back to Catalog
+      </Link>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '40px', alignItems: 'start' }}>
+        {/* Product Media */}
+        <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', minHeight: '340px', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
+          <div style={{ textAlign: 'center', color: '#94a3b8' }}>
+            <span style={{ fontSize: '64px', display: 'block', marginBottom: '8px' }}>📦</span>
+            <span>{product.name}</span>
+          </div>
+        </div>
+
+        {/* Product Details */}
+        <div>
+          {product.category && (
+            <span style={{ display: 'inline-block', padding: '4px 10px', background: '#e0e7ff', color: '#4338ca', borderRadius: '999px', fontSize: '12px', fontWeight: 600, marginBottom: '12px' }}>
+              {product.category}
+            </span>
+          )}
+          <h1 style={{ fontSize: '28px', margin: '0 0 12px 0', color: '#0f172a' }}>{product.name}</h1>
+          <p style={{ fontSize: '26px', fontWeight: 'bold', color: '<%= theme.primary %>', margin: '0 0 16px 0' }}>
+            <%= currency %>{product.price}
+          </p>
+
+          <p style={{ color: '#475569', lineHeight: '1.6', marginBottom: '24px' }}>
+            {product.description || 'No description provided for this product.'}
+          </p>
+
+          <div style={{ marginBottom: '20px' }}>
+            <span style={{ fontSize: '14px', fontWeight: 600, color: product.stock > 0 ? '#16a34a' : '#dc2626' }}>
+              {product.stock > 0 ? `✓ In Stock (${product.stock} available)` : '✗ Currently Out of Stock'}
+            </span>
+          </div>
+
+          {/* Action Row */}
+          <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap', marginBottom: '24px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', border: '1px solid #cbd5e1', borderRadius: '6px', overflow: 'hidden' }}>
+              <button
+                type="button"
+                onClick={() => setQty(Math.max(1, qty - 1))}
+                style={{ padding: '8px 14px', background: '#f1f5f9', border: 'none', cursor: 'pointer', fontSize: '16px' }}
+              >
+                -
+              </button>
+              <span style={{ padding: '8px 16px', fontWeight: 600, minWidth: '24px', textAlign: 'center' }}>{qty}</span>
+              <button
+                type="button"
+                onClick={() => setQty(qty + 1)}
+                style={{ padding: '8px 14px', background: '#f1f5f9', border: 'none', cursor: 'pointer', fontSize: '16px' }}
+              >
+                +
+              </button>
+            </div>
+
+            <button
+              type="button"
+              onClick={addToCart}
+              disabled={product.stock <= 0}
+              style={{
+                flex: 1,
+                minWidth: '160px',
+                padding: '12px 24px',
+                background: product.stock > 0 ? '<%= theme.primary %>' : '#94a3b8',
+                color: '#fff',
+                border: 'none',
+                borderRadius: '6px',
+                fontWeight: 600,
+                cursor: product.stock > 0 ? 'pointer' : 'not-allowed',
+                transition: 'opacity 0.2s',
+              }}
+            >
+              Add to Cart
+            </button>
+
+<% if (has('wishlist')) { %>
+            <button
+              type="button"
+              onClick={toggleWishlist}
+              disabled={wishlistLoading}
+              title={inWishlist ? 'Remove from wishlist' : 'Add to wishlist'}
+              style={{
+                padding: '12px 16px',
+                background: inWishlist ? '#fee2e2' : '#f1f5f9',
+                border: inWishlist ? '1px solid #f87171' : '1px solid #cbd5e1',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontSize: '18px',
+              }}
+            >
+              {inWishlist ? '❤️' : '🤍'}
+            </button>
+<% } %>
+          </div>
+
+          {addedNotice && (
+            <div style={{ padding: '12px', background: '#dcfce7', color: '#15803d', borderRadius: '6px', marginBottom: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span>✓ Added {qty} item(s) to your cart!</span>
+              <Link to="/cart" style={{ fontWeight: 600, color: '#15803d', textDecoration: 'underline' }}>View Cart →</Link>
+            </div>
+          )}
+        </div>
+      </div>
+
+<% if (has('reviews')) { %>
+      {/* Customer Reviews Section */}
+      <div style={{ marginTop: '60px', borderTop: '1px solid #e2e8f0', paddingTop: '32px' }}>
+        <h2 style={{ fontSize: '22px', marginBottom: '20px', color: '#0f172a' }}>Customer Reviews ({reviews.length})</h2>
+
+        {/* Add Review Form */}
+        <form onSubmit={handleReviewSubmit} style={{ background: '#f8fafc', padding: '20px', borderRadius: '8px', marginBottom: '32px', border: '1px solid #e2e8f0' }}>
+          <h3 style={{ fontSize: '16px', margin: '0 0 12px 0' }}>Write a Review</h3>
+          <div style={{ marginBottom: '12px' }}>
+            <label style={{ display: 'block', fontSize: '14px', marginBottom: '4px', fontWeight: 500 }}>Rating</label>
+            <select
+              value={reviewRating}
+              onChange={(e) => setReviewRating(Number(e.target.value))}
+              style={{ padding: '8px', borderRadius: '4px', border: '1px solid #cbd5e1', width: '120px' }}
+            >
+              <option value="5">⭐⭐⭐⭐⭐ (5/5)</option>
+              <option value="4">⭐⭐⭐⭐ (4/5)</option>
+              <option value="3">⭐⭐⭐ (3/5)</option>
+              <option value="2">⭐⭐ (2/5)</option>
+              <option value="1">⭐ (1/5)</option>
+            </select>
+          </div>
+          <div style={{ marginBottom: '12px' }}>
+            <label style={{ display: 'block', fontSize: '14px', marginBottom: '4px', fontWeight: 500 }}>Your Feedback</label>
+            <textarea
+              required
+              rows="3"
+              placeholder="What did you think of this product?"
+              value={reviewComment}
+              onChange={(e) => setReviewComment(e.target.value)}
+              style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', boxSizing: 'border-box' }}
+            />
+          </div>
+          <button
+            type="submit"
+            disabled={submittingReview}
+            style={{ padding: '8px 16px', background: '<%= theme.primary %>', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 600 }}
+          >
+            {submittingReview ? 'Submitting...' : 'Post Review'}
+          </button>
+        </form>
+
+        {/* Review List */}
+        {reviews.length === 0 ? (
+          <p style={{ color: '#64748b' }}>No reviews yet. Be the first to share your thoughts!</p>
+        ) : (
+          <div style={{ display: 'grid', gap: '16px' }}>
+            {reviews.map((r, idx) => (
+              <div key={r._id || idx} style={{ padding: '16px', border: '1px solid #e2e8f0', borderRadius: '8px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                  <span style={{ fontWeight: 600, color: '#1e293b' }}>{r.user?.name || 'Verified Buyer'}</span>
+                  <span>{'⭐'.repeat(r.rating || 5)}</span>
+                </div>
+                <p style={{ margin: 0, color: '#475569', lineHeight: '1.5' }}>{r.comment}</p>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+<% } %>
+    </div>
+  );
+}

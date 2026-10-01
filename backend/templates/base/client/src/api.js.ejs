@@ -1,0 +1,40 @@
+// Unified API client for generated store
+const rawUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api/v1';
+export const API = rawUrl.endsWith('/api/v1') ? rawUrl : `${rawUrl.replace(/\/+$/, '')}/api/v1`;
+
+export async function request(path, options = {}) {
+  const token = localStorage.getItem('token');
+  const cleanPath = path.startsWith('/') ? path : `/${path}`;
+  
+  const headers = {
+    'Content-Type': 'application/json',
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...(options.headers || {}),
+  };
+
+  const res = await fetch(`${API}${cleanPath}`, {
+    ...options,
+    headers,
+  });
+
+  const contentType = res.headers.get('content-type') || '';
+  if (!contentType.includes('application/json')) {
+    if (!res.ok) {
+      throw new Error(`Server returned ${res.status}: ${res.statusText}`);
+    }
+    return res.text();
+  }
+
+  const body = await res.json();
+  if (!res.ok || (body && body.success === false)) {
+    const errorMsg = body?.error?.message || body?.error || body?.message || 'Request failed';
+    throw new Error(errorMsg);
+  }
+
+  return body.data !== undefined ? body.data : body;
+}
+
+export const get = (path) => request(path, { method: 'GET' });
+export const post = (path, body) => request(path, { method: 'POST', body: JSON.stringify(body) });
+export const put = (path, body) => request(path, { method: 'PUT', body: JSON.stringify(body) });
+export const del = (path) => request(path, { method: 'DELETE' });

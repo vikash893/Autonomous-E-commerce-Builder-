@@ -1,0 +1,237 @@
+import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
+import { request } from '../../api';
+
+export default function AdminDashboard() {
+  const [stats, setStats] = useState({
+    productsCount: 0,
+    ordersCount: 0,
+    totalRevenue: 0,
+    lowStockCount: 0,
+    pendingOrdersCount: 0,
+    recentOrders: [],
+    recentProducts: [],
+  });
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    request('/admin/stats')
+      .then((data) => {
+        if (data) setStats(data);
+      })
+      .catch((err) => console.error('Admin stats error:', err))
+      .finally(() => setLoading(false));
+  }, []);
+
+  return (
+    <div style={{ maxWidth: '1100px', margin: '40px auto', padding: '0 20px' }}>
+      {/* Header */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px', marginBottom: '32px' }}>
+        <div>
+          <span style={{ fontSize: '13px', textTransform: 'uppercase', color: '#6366f1', fontWeight: 700, letterSpacing: '0.05em' }}>
+            Store Administration Panel
+          </span>
+          <h1 style={{ fontSize: '32px', margin: '4px 0 0', color: '#0f172a' }}>Admin Dashboard</h1>
+          <p style={{ margin: '4px 0 0', color: '#64748b', fontSize: '14px' }}>
+            Live performance analytics, product inventory, and customer orders fulfillment
+          </p>
+        </div>
+        <div style={{ display: 'flex', gap: '10px' }}>
+          <Link
+            to="/admin/products"
+            style={{
+              padding: '10px 18px',
+              background: 'var(--primary, #4f46e5)',
+              color: '#fff',
+              textDecoration: 'none',
+              borderRadius: '8px',
+              fontWeight: 600,
+              fontSize: '14px',
+              boxShadow: '0 2px 4px rgba(79, 70, 229, 0.2)',
+            }}
+          >
+            + Manage Products
+          </Link>
+          <Link
+            to="/"
+            style={{
+              padding: '10px 16px',
+              background: '#fff',
+              color: '#334155',
+              border: '1px solid #cbd5e1',
+              textDecoration: 'none',
+              borderRadius: '8px',
+              fontWeight: 500,
+              fontSize: '14px',
+            }}
+          >
+            🏪 View Storefront
+          </Link>
+        </div>
+      </div>
+
+      {loading ? (
+        <p style={{ textAlign: 'center', padding: '60px', color: '#64748b' }}>Loading dashboard analytics...</p>
+      ) : (
+        <>
+          {/* KPI Analytics Cards */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '20px', marginBottom: '36px' }}>
+            {/* Card 1: Total Revenue */}
+            <div style={{ padding: '24px', background: '#fff', border: '1px solid #e2e8f0', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: '13px', textTransform: 'uppercase', color: '#64748b', fontWeight: 600, letterSpacing: '0.05em' }}>Total Revenue</span>
+                <span style={{ fontSize: '20px' }}>💰</span>
+              </div>
+              <p style={{ fontSize: '32px', fontWeight: 'bold', margin: '10px 0 6px', color: 'var(--primary, #4f46e5)' }}>
+                <%= currency %>{stats.totalRevenue?.toLocaleString() || 0}
+              </p>
+              <span style={{ fontSize: '13px', color: '#16a34a', fontWeight: 500 }}>
+                From confirmed customer orders
+              </span>
+            </div>
+
+            {/* Card 2: Total Orders */}
+            <div style={{ padding: '24px', background: '#fff', border: '1px solid #e2e8f0', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: '13px', textTransform: 'uppercase', color: '#64748b', fontWeight: 600, letterSpacing: '0.05em' }}>Total Orders</span>
+                <span style={{ fontSize: '20px' }}>📋</span>
+              </div>
+              <p style={{ fontSize: '32px', fontWeight: 'bold', margin: '10px 0 6px', color: '#0f172a' }}>
+                {stats.ordersCount}
+              </p>
+              <Link to="/admin/orders" style={{ fontSize: '13px', color: 'var(--primary, #4f46e5)', fontWeight: 600, textDecoration: 'none' }}>
+                {stats.pendingOrdersCount > 0 ? `⚠️ ${stats.pendingOrdersCount} pending orders` : 'All orders processed →'}
+              </Link>
+            </div>
+
+            {/* Card 3: Total Products */}
+            <div style={{ padding: '24px', background: '#fff', border: '1px solid #e2e8f0', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: '13px', textTransform: 'uppercase', color: '#64748b', fontWeight: 600, letterSpacing: '0.05em' }}>Catalog Items</span>
+                <span style={{ fontSize: '20px' }}>📦</span>
+              </div>
+              <p style={{ fontSize: '32px', fontWeight: 'bold', margin: '10px 0 6px', color: '#0f172a' }}>
+                {stats.productsCount}
+              </p>
+              <Link to="/admin/products" style={{ fontSize: '13px', color: 'var(--primary, #4f46e5)', fontWeight: 600, textDecoration: 'none' }}>
+                Manage catalog & stock →
+              </Link>
+            </div>
+
+            {/* Card 4: Inventory Health */}
+            <div style={{ padding: '24px', background: '#fff', border: '1px solid #e2e8f0', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: '13px', textTransform: 'uppercase', color: '#64748b', fontWeight: 600, letterSpacing: '0.05em' }}>Low Stock Alert</span>
+                <span style={{ fontSize: '20px' }}>⚠️</span>
+              </div>
+              <p style={{ fontSize: '32px', fontWeight: 'bold', margin: '10px 0 6px', color: stats.lowStockCount > 0 ? '#ea580c' : '#16a34a' }}>
+                {stats.lowStockCount}
+              </p>
+              <span style={{ fontSize: '13px', color: stats.lowStockCount > 0 ? '#ea580c' : '#16a34a', fontWeight: 500 }}>
+                {stats.lowStockCount > 0 ? 'Items below 5 in inventory' : 'All items well-stocked'}
+              </span>
+            </div>
+          </div>
+
+          {/* Recent Orders Section */}
+          <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '24px', marginBottom: '32px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <h2 style={{ fontSize: '18px', margin: 0, color: '#0f172a' }}>Recent Customer Orders</h2>
+              <Link to="/admin/orders" style={{ color: 'var(--primary, #4f46e5)', textDecoration: 'none', fontSize: '13px', fontWeight: 600 }}>
+                View All Orders ({stats.ordersCount}) →
+              </Link>
+            </div>
+
+            {(!stats.recentOrders || stats.recentOrders.length === 0) ? (
+              <p style={{ color: '#64748b', textAlign: 'center', padding: '30px 0' }}>No customer orders placed yet.</p>
+            ) : (
+              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '14px' }}>
+                <thead>
+                  <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', color: '#64748b', fontSize: '12px', textTransform: 'uppercase' }}>
+                    <th style={{ padding: '10px 14px' }}>Order ID</th>
+                    <th style={{ padding: '10px 14px' }}>Customer</th>
+                    <th style={{ padding: '10px 14px' }}>Total Amount</th>
+                    <th style={{ padding: '10px 14px' }}>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {stats.recentOrders.slice(0, 5).map((o) => (
+                    <tr key={o._id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                      <td style={{ padding: '12px 14px', fontWeight: 600 }}>#{o._id.slice(-6).toUpperCase()}</td>
+                      <td style={{ padding: '12px 14px' }}>{o.customerName} ({o.customerEmail})</td>
+                      <td style={{ padding: '12px 14px', fontWeight: 600, color: 'var(--primary, #4f46e5)' }}>
+                        <%= currency %>{o.totalAmount}
+                      </td>
+                      <td style={{ padding: '12px 14px' }}>
+                        <span style={{
+                          padding: '2px 8px',
+                          borderRadius: '999px',
+                          fontSize: '11px',
+                          fontWeight: 600,
+                          background: o.status === 'DELIVERED' || o.status === 'APPROVED' ? '#dcfce7' : o.status === 'CANCELLED' ? '#fee2e2' : '#fef3c7',
+                          color: o.status === 'DELIVERED' || o.status === 'APPROVED' ? '#15803d' : o.status === 'CANCELLED' ? '#b91c1c' : '#b45309',
+                        }}>
+                          {o.status}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+
+          {/* Administrative Shortcuts */}
+          <div style={{ background: '#f8fafc', padding: '24px', border: '1px solid #e2e8f0', borderRadius: '12px' }}>
+            <h2 style={{ fontSize: '16px', margin: '0 0 14px 0', color: '#0f172a' }}>⚡ Quick Management Shortcuts</h2>
+            <div style={{ display: 'flex', gap: '14px', flexWrap: 'wrap' }}>
+              <Link
+                to="/admin/products"
+                style={{
+                  padding: '10px 18px',
+                  background: 'var(--primary, #4f46e5)',
+                  color: '#fff',
+                  textDecoration: 'none',
+                  borderRadius: '6px',
+                  fontWeight: 600,
+                  fontSize: '13px',
+                }}
+              >
+                📦 Add & Edit Products (CRUD)
+              </Link>
+              <Link
+                to="/admin/orders"
+                style={{
+                  padding: '10px 18px',
+                  background: '#334155',
+                  color: '#fff',
+                  textDecoration: 'none',
+                  borderRadius: '6px',
+                  fontWeight: 600,
+                  fontSize: '13px',
+                }}
+              >
+                📋 Track & Update Orders
+              </Link>
+              <Link
+                to="/"
+                style={{
+                  padding: '10px 18px',
+                  background: '#fff',
+                  color: '#334155',
+                  border: '1px solid #cbd5e1',
+                  textDecoration: 'none',
+                  borderRadius: '6px',
+                  fontWeight: 600,
+                  fontSize: '13px',
+                }}
+              >
+                🛍️ View Customer Experience
+              </Link>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}

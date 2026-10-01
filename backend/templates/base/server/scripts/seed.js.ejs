@@ -1,0 +1,22 @@
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '../../.env') });
+require('dotenv').config({ path: path.join(__dirname, '../.env') });
+require('dotenv').config();
+const mongoose = require('mongoose');
+
+const MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/<%= slug %>';
+
+// @seed-imports
+
+(async () => {
+  try {
+    console.log('Connecting to database for seeding:', MONGO_URI);
+    await mongoose.connect(MONGO_URI);
+    // @seed-run
+    console.log('Seed complete! Realistic demo data populated successfully.');
+  } catch (err) {
+    console.error('Seed script error:', err.message);
+  } finally {
+    await mongoose.disconnect();
+  }
+})();

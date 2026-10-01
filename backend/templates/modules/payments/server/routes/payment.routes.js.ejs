@@ -1,0 +1,203 @@
+const express = require('express');
+const crypto = require('crypto');
+const mongoose = require('mongoose');
+const Razorpay = require('razorpay');
+const Product = require('../models/Product');
+const Order = require('../models/Order');
+const PaymentAttempt = require('../models/PaymentAttempt');
+<% if (has('coupons')) { %>const Coupon = require('../models/Coupon');<% } %>
+
+const router = express.Router();
+
+function getRazorpay() {
+  if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET) {
+    const error = new Error('Razorpay keys are not configured');
+    error.status = 503;
+    throw error;
+  }
+
+  return new Razorpay({
+    key_id: process.env.RAZORPAY_KEY_ID,
+    key_secret: process.env.RAZORPAY_KEY_SECRET,
+  });
+}
+
+function getAuthUser(req) {
+  const authorization = req.headers.authorization || '';
+  if (!authorization.startsWith('Bearer ')) return null;
+
+  try {
+    return require('jsonwebtoken').verify(
+      authorization.slice(7),
+      process.env.JWT_SECRET || 'secret'
+    );
+  } catch {
+    return null;
+  }
+}
+
+function safeEqualHex(left, right) {
+  if (!/^[a-f0-9]+$/i.test(left) || !/^[a-f0-9]+$/i.test(right)) return false;
+  const leftBuffer = Buffer.from(left, 'hex');
+  const rightBuffer = Buffer.from(right, 'hex');
+  return leftBuffer.length === rightBuffer.length && crypto.timingSafeEqual(leftBuffer, rightBuffer);
+}
+
+// Create a gateway order without creating a store order. The store order is
+// written only after Razorpay confirms payment.
+router.post('/create-order', async (req, res, next) => {
+  try {
+    const { customerName, customerEmail, shippingAddress, items, couponCode } = req.body;
+
+    if (!String(customerName || '').trim() || !String(customerEmail || '').trim() || !String(shippingAddress || '').trim()) {
+      return res.status(400).json({ success: false, error: 'Customer and shipping details are required' });
+    }
+    if (!Array.isArray(items) || items.length === 0 || items.length > 50) {
+      return res.status(400).json({ success: false, error: 'Order must contain between 1 and 50 items' });
+    }
+
+    const requestedItems = items.map((item) => ({
+      productId: String(item.product || item._id || ''),
+      qty: Number(item.qty || 1),
+    }));
+    if (requestedItems.some((item) => !mongoose.Types.ObjectId.isValid(item.productId) || !Number.isInteger(item.qty) || item.qty < 1)) {
+      return res.status(400).json({ success: false, error: 'Order contains an invalid product or quantity' });
+    }
+
+    const products = await Product.find({ _id: { $in: requestedItems.map((item) => item.productId) } });
+    const productsById = new Map(products.map((product) => [String(product._id), product]));
+    const orderItems = [];
+    let subtotal = 0;
+
+    for (const item of requestedItems) {
+      const product = productsById.get(item.productId);
+      if (!product) return res.status(400).json({ success: false, error: 'A product in the cart is no longer available' });
+      if (item.qty > Number(product.stock || 0)) {
+        return res.status(400).json({ success: false, error: `${product.name} does not have enough stock` });
+      }
+
+      const price = Number(product.price);
+      if (!Number.isFinite(price) || price < 0) {
+        return res.status(400).json({ success: false, error: 'A product has an invalid price' });
+      }
+      subtotal += price * item.qty;
+      orderItems.push({ product: product._id, name: product.name, price, qty: item.qty });
+    }
+
+    let totalAmount = subtotal;
+<% if (has('coupons')) { %>
+    if (couponCode) {
+      const coupon = await Coupon.findOne({ code: String(couponCode).trim().toUpperCase(), isActive: true });
+      if (!coupon || subtotal < coupon.minOrder) {
+        return res.status(400).json({ success: false, error: 'Coupon is invalid or the minimum order amount is not met' });
+      }
+      const discount = coupon.type === 'percentage'
+        ? Math.round((subtotal * coupon.discount) / 100)
+        : Math.min(coupon.discount, subtotal);
+      totalAmount = Math.max(0, subtotal - discount);
+    }
+<% } %>
+
+    const amount = Math.round(totalAmount * 100);
+    if (!Number.isSafeInteger(amount) || amount <= 0) {
+      return res.status(400).json({ success: false, error: 'Order total must be greater than zero' });
+    }
+
+    const gateway = getRazorpay();
+    const gatewayOrder = await gateway.orders.create({
+      amount,
+      currency: 'INR',
+      receipt: `checkout_${crypto.randomUUID()}`,
+    });
+
+    const authUser = getAuthUser(req);
+    const userId = authUser?.id || authUser?._id || authUser?.userId;
+    const attempt = await PaymentAttempt.create({
+      gatewayOrderId: gatewayOrder.id,
+      amount,
+      currency: 'INR',
+      orderData: {
+        user: userId && mongoose.Types.ObjectId.isValid(userId) ? userId : undefined,
+        customerName: String(customerName).trim(),
+        customerEmail: String(customerEmail).trim().toLowerCase(),
+        shippingAddress: String(shippingAddress).trim(),
+        items: orderItems,
+        totalAmount,
+      },
+    });
+
+    return res.status(201).json({
+      success: true,
+      data: {
+        orderId: gatewayOrder.id,
+        attemptId: String(attempt._id),
+        amount,
+        currency: 'INR',
+        key: process.env.RAZORPAY_KEY_ID,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/verify', async (req, res, next) => {
+  try {
+    const {
+      razorpay_order_id: gatewayOrderId,
+      razorpay_payment_id: gatewayPaymentId,
+      razorpay_signature: signature,
+    } = req.body;
+
+    if (!gatewayOrderId || !gatewayPaymentId || !signature) {
+      return res.status(400).json({ success: false, error: 'Payment verification details are required' });
+    }
+
+    const attempt = await PaymentAttempt.findOne({ gatewayOrderId });
+    if (!attempt) return res.status(404).json({ success: false, error: 'Payment attempt not found' });
+
+    const expectedSignature = crypto
+      .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET || '')
+      .update(`${gatewayOrderId}|${gatewayPaymentId}`)
+      .digest('hex');
+    if (!safeEqualHex(expectedSignature, String(signature))) {
+      return res.status(400).json({ success: false, error: 'Invalid payment signature' });
+    }
+
+    const existingOrder = await Order.findOne({ paymentOrderId: gatewayOrderId });
+    if (existingOrder) {
+      return res.json({ success: true, data: existingOrder, message: 'Payment already verified' });
+    }
+
+    const gateway = getRazorpay();
+    let payment = await gateway.payments.fetch(gatewayPaymentId);
+    if (payment.order_id !== gatewayOrderId || payment.amount !== attempt.amount || payment.currency !== attempt.currency) {
+      return res.status(400).json({ success: false, error: 'Payment does not match this checkout' });
+    }
+    if (payment.status === 'authorized') {
+      payment = await gateway.payments.capture(gatewayPaymentId, attempt.amount, attempt.currency);
+    }
+    if (payment.status !== 'captured') {
+      return res.status(400).json({ success: false, error: 'Payment has not been captured' });
+    }
+
+    const order = await Order.create({
+      ...attempt.orderData,
+      paymentStatus: 'PAID',
+      paymentProvider: 'razorpay',
+      paymentOrderId: gatewayOrderId,
+      paymentId: gatewayPaymentId,
+    });
+    await PaymentAttempt.updateOne({ _id: attempt._id }, { $set: { status: 'PAID' } });
+
+    return res.json({ success: true, data: order, message: 'Payment verified successfully' });
+  } catch (err) {
+    if (err.code === 11000 && req.body.razorpay_order_id) {
+      const order = await Order.findOne({ paymentOrderId: req.body.razorpay_order_id });
+      if (order) return res.json({ success: true, data: order, message: 'Payment already verified' });
+    }
+    next(err);
+  }
+});
+
+module.exports = router;

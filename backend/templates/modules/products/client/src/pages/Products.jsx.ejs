@@ -1,0 +1,218 @@
+import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { request } from '../api';
+
+export default function Products() {
+  const [items, setItems] = useState([]);
+  const [state, setState] = useState('loading');
+  const [search, setSearch] = useState('');
+  const [category, setCategory] = useState('');
+  const [categories, setCategories] = useState([]);
+  const [cartAlert, setCartAlert] = useState('');
+
+  const loadProducts = () => {
+    setState('loading');
+    const params = new URLSearchParams();
+    if (search.trim()) params.append('search', search.trim());
+    if (category) params.append('category', category);
+
+    const queryStr = params.toString() ? `?${params.toString()}` : '';
+
+    request(`/products${queryStr}`)
+      .then((d) => {
+        const prodList = d?.items || (Array.isArray(d) ? d : []);
+        setItems(prodList);
+        setState(prodList.length ? 'ready' : 'empty');
+
+        // Extract unique categories
+        if (prodList.length) {
+          const cats = [...new Set(prodList.map((p) => p.category).filter(Boolean))];
+          if (cats.length && categories.length === 0) setCategories(cats);
+        }
+      })
+      .catch(() => setState('error'));
+  };
+
+  useEffect(() => {
+    loadProducts();
+  }, [category]);
+
+  const handleSearchSubmit = (e) => {
+    e.preventDefault();
+    loadProducts();
+  };
+
+  const quickAddToCart = (product, e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    try {
+      const saved = localStorage.getItem('guest_cart');
+      let cart = saved ? JSON.parse(saved) : [];
+      const existing = cart.find((i) => i._id === product._id);
+      if (existing) {
+        existing.qty = (existing.qty || 1) + 1;
+      } else {
+        cart.push({ ...product, qty: 1 });
+      }
+      localStorage.setItem('guest_cart', JSON.stringify(cart));
+      setCartAlert(`Added "${product.name}" to cart!`);
+      setTimeout(() => setCartAlert(''), 2500);
+    } catch (err) {
+      alert('Error updating cart');
+    }
+  };
+
+  return (
+    <div style={{ maxWidth: '1100px', margin: '30px auto', padding: '0 20px' }}>
+      {/* Header & Filter Bar */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px', marginBottom: '24px' }}>
+        <div>
+          <h1 style={{ fontSize: '28px', margin: 0, color: '#0f172a' }}>Featured Products</h1>
+          <p style={{ margin: '4px 0 0', color: '#64748b', fontSize: '14px' }}>Discover hand-picked essentials with instant delivery</p>
+        </div>
+
+        {/* Search & Category Filter */}
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+          <form onSubmit={handleSearchSubmit} style={{ display: 'flex', gap: '6px' }}>
+            <input
+              type="text"
+              placeholder="Search products..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '14px', width: '180px' }}
+            />
+            <button
+              type="submit"
+              style={{ padding: '8px 14px', background: '<%= theme.primary %>', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 500 }}
+            >
+              Search
+            </button>
+          </form>
+
+<% if (opts.products.categories) { %>
+          {categories.length > 0 && (
+            <select
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '14px', background: '#fff' }}
+            >
+              <option value="">All Categories</option>
+              {categories.map((c) => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
+          )}
+<% } %>
+        </div>
+      </div>
+
+      {cartAlert && (
+        <div style={{ padding: '12px 16px', background: '#dcfce7', color: '#15803d', borderRadius: '6px', marginBottom: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span>✓ {cartAlert}</span>
+          <Link to="/cart" style={{ fontWeight: 600, color: '#15803d', textDecoration: 'underline' }}>View Cart →</Link>
+        </div>
+      )}
+
+      {/* Product States */}
+      {state === 'loading' && <p style={{ textAlign: 'center', padding: '40px', color: '#64748b' }}>Loading products catalog...</p>}
+      {state === 'error' && <p style={{ textAlign: 'center', padding: '40px', color: '#dc2626' }}>Could not load products. Please check if your server is running.</p>}
+      {state === 'empty' && (
+        <div style={{ textAlign: 'center', padding: '60px 20px', background: '#f8fafc', borderRadius: '8px', border: '1px dashed #cbd5e1' }}>
+          <h3>No products found</h3>
+          <p style={{ color: '#64748b' }}>Try clearing your filters or run the seed command: <code>npm run seed</code></p>
+          {(search || category) && (
+            <button
+              onClick={() => { setSearch(''); setCategory(''); loadProducts(); }}
+              style={{ padding: '8px 16px', background: '#e2e8f0', border: 'none', borderRadius: '4px', cursor: 'pointer', marginTop: '10px' }}
+            >
+              Clear Filters
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Product Grid */}
+      {state === 'ready' && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '24px' }}>
+          {items.map((p) => (
+            <div
+              key={p._id}
+              style={{
+                border: '1px solid #e2e8f0',
+                borderRadius: '10px',
+                overflow: 'hidden',
+                background: '#ffffff',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+                display: 'flex',
+                flexDirection: 'column',
+                transition: 'transform 0.15s ease, box-shadow 0.15s ease',
+              }}
+            >
+              <div style={{ height: '160px', background: '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '48px', borderBottom: '1px solid #f1f5f9' }}>
+                📦
+              </div>
+              <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', flex: 1 }}>
+                {p.category && (
+                  <span style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#6366f1', fontWeight: 600, marginBottom: '4px' }}>
+                    {p.category}
+                  </span>
+                )}
+                <h3 style={{ margin: '0 0 6px 0', fontSize: '16px', color: '#0f172a' }}>{p.name}</h3>
+                <p style={{ margin: '0 0 12px 0', fontSize: '13px', color: '#64748b', flex: 1, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                  {p.description || 'Quality merchandise curated for everyday comfort.'}
+                </p>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+                  <span style={{ fontSize: '18px', fontWeight: 'bold', color: '<%= theme.primary %>' }}>
+                    <%= currency %>{p.price}
+                  </span>
+                  <span style={{ fontSize: '12px', color: p.stock > 0 ? '#16a34a' : '#dc2626', fontWeight: 500 }}>
+                    {p.stock > 0 ? `${p.stock} in stock` : 'Out of stock'}
+                  </span>
+                </div>
+
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <Link
+                    to={`/products/${p._id}`}
+                    style={{
+                      flex: 1,
+                      textAlign: 'center',
+                      padding: '8px',
+                      background: '#f1f5f9',
+                      color: '#334155',
+                      borderRadius: '6px',
+                      textDecoration: 'none',
+                      fontSize: '13px',
+                      fontWeight: 600,
+                    }}
+                  >
+                    Details
+                  </Link>
+<% if (has('cart')) { %>
+                  <button
+                    type="button"
+                    onClick={(e) => quickAddToCart(p, e)}
+                    disabled={p.stock <= 0}
+                    style={{
+                      flex: 1,
+                      padding: '8px',
+                      background: p.stock > 0 ? '<%= theme.primary %>' : '#cbd5e1',
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: '6px',
+                      fontSize: '13px',
+                      fontWeight: 600,
+                      cursor: p.stock > 0 ? 'pointer' : 'not-allowed',
+                    }}
+                  >
+                    + Cart
+                  </button>
+<% } %>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}

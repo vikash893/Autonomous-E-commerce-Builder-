@@ -1,0 +1,195 @@
+import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
+
+export default function Cart() {
+  const [items, setItems] = useState([]);
+
+  useEffect(() => {
+    const saved = localStorage.getItem('guest_cart');
+    if (saved) {
+      try {
+        setItems(JSON.parse(saved));
+      } catch {}
+    }
+  }, []);
+
+  const saveCart = (next) => {
+    setItems(next);
+    localStorage.setItem('guest_cart', JSON.stringify(next));
+  };
+
+  const updateQty = (id, delta) => {
+    const next = items
+      .map((item) => {
+        if (item._id === id) {
+          const newQty = (item.qty || 1) + delta;
+          return newQty > 0 ? { ...item, qty: newQty } : null;
+        }
+        return item;
+      })
+      .filter(Boolean);
+    saveCart(next);
+  };
+
+  const removeItem = (id) => {
+    const next = items.filter((i) => i._id !== id);
+    saveCart(next);
+  };
+
+  const clearCart = () => {
+    saveCart([]);
+  };
+
+  const subtotal = items.reduce(
+    (acc, item) => acc + (item.price || 0) * (item.qty || 1),
+    0
+  );
+
+  return (
+    <div style={{ maxWidth: '860px', margin: '40px auto', padding: '0 20px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+        <h1 style={{ fontSize: '28px', margin: 0, color: '#0f172a' }}>Shopping Cart</h1>
+        {items.length > 0 && (
+          <button
+            onClick={clearCart}
+            style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '14px', textDecoration: 'underline' }}
+          >
+            Clear All
+          </button>
+        )}
+      </div>
+
+      {items.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: '60px 20px', background: '#f8fafc', borderRadius: '12px', border: '1px dashed #cbd5e1' }}>
+          <span style={{ fontSize: '48px', display: 'block', marginBottom: '12px' }}>🛒</span>
+          <h2 style={{ fontSize: '20px', color: '#334155', margin: '0 0 8px 0' }}>Your cart is empty</h2>
+          <p style={{ color: '#64748b', margin: '0 0 20px 0' }}>Looks like you haven't added any products to your cart yet.</p>
+          <Link
+            to="/"
+            style={{
+              display: 'inline-block',
+              padding: '10px 20px',
+              background: '<%= theme.primary %>',
+              color: '#fff',
+              textDecoration: 'none',
+              borderRadius: '6px',
+              fontWeight: 600,
+            }}
+          >
+            ← Start Shopping
+          </Link>
+        </div>
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '32px', alignItems: 'start' }}>
+          {/* Cart Item List */}
+          <div style={{ border: '1px solid #e2e8f0', borderRadius: '12px', overflow: 'hidden', background: '#fff' }}>
+            {items.map((item, idx) => (
+              <div
+                key={item._id || idx}
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  padding: '16px 20px',
+                  borderBottom: idx === items.length - 1 ? 'none' : '1px solid #f1f5f9',
+                }}
+              >
+                <div style={{ flex: 1 }}>
+                  <h3 style={{ margin: '0 0 4px 0', fontSize: '16px', color: '#0f172a' }}>{item.name}</h3>
+                  <span style={{ color: '<%= theme.primary %>', fontWeight: 600 }}>
+                    <%= currency %>{item.price} each
+                  </span>
+                </div>
+
+                {/* Quantity Controls */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', border: '1px solid #cbd5e1', borderRadius: '6px' }}>
+                    <button
+                      onClick={() => updateQty(item._id, -1)}
+                      style={{ padding: '4px 10px', background: '#f8fafc', border: 'none', cursor: 'pointer', fontSize: '14px' }}
+                    >
+                      -
+                    </button>
+                    <span style={{ padding: '4px 12px', fontSize: '14px', fontWeight: 600 }}>{item.qty || 1}</span>
+                    <button
+                      onClick={() => updateQty(item._id, 1)}
+                      style={{ padding: '4px 10px', background: '#f8fafc', border: 'none', cursor: 'pointer', fontSize: '14px' }}
+                    >
+                      +
+                    </button>
+                  </div>
+
+                  <span style={{ minWidth: '70px', textAlign: 'right', fontWeight: 'bold', color: '#0f172a' }}>
+                    <%= currency %>{(item.price || 0) * (item.qty || 1)}
+                  </span>
+
+                  <button
+                    onClick={() => removeItem(item._id)}
+                    title="Remove item"
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: '#94a3b8',
+                      cursor: 'pointer',
+                      fontSize: '18px',
+                      padding: '4px',
+                    }}
+                  >
+                    ×
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Summary Box */}
+          <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '24px' }}>
+            <h2 style={{ fontSize: '18px', margin: '0 0 16px 0', color: '#0f172a' }}>Order Summary</h2>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', color: '#64748b' }}>
+              <span>Items Total</span>
+              <span><%= currency %>{subtotal}</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px', color: '#64748b' }}>
+              <span>Estimated Shipping</span>
+              <span style={{ color: '#16a34a', fontWeight: 500 }}>FREE</span>
+            </div>
+            <div style={{ height: '1px', background: '#e2e8f0', margin: '16px 0' }} />
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '24px', fontSize: '18px', fontWeight: 'bold', color: '#0f172a' }}>
+              <span>Total</span>
+              <span style={{ color: '<%= theme.primary %>' }}><%= currency %>{subtotal}</span>
+            </div>
+
+<% if (has('orders')) { %>
+            <Link
+              to="/checkout"
+              style={{
+                display: 'block',
+                textAlign: 'center',
+                padding: '14px',
+                background: '<%= theme.primary %>',
+                color: '#fff',
+                textDecoration: 'none',
+                borderRadius: '8px',
+                fontWeight: 600,
+                fontSize: '15px',
+              }}
+            >
+              Proceed to Checkout →
+            </Link>
+<% } else { %>
+            <p style={{ fontSize: '13px', color: '#64748b', textAlign: 'center', margin: 0 }}>
+              Checkout module not configured.
+            </p>
+<% } %>
+
+            <div style={{ marginTop: '16px', textAlign: 'center' }}>
+              <Link to="/" style={{ color: '#64748b', fontSize: '13px', textDecoration: 'none' }}>
+                ← Continue Shopping
+              </Link>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

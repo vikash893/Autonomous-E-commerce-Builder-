@@ -1,0 +1,23 @@
+import { Link } from 'react-router-dom';
+
+export default function PaymentSuccess() {
+  return (
+    <div style={{ maxWidth: '600px', margin: '60px auto', textAlign: 'center', padding: '0 20px' }}>
+      <div style={{ fontSize: '48px', marginBottom: '16px' }}>🎉</div>
+      <h1>Order Placed Successfully!</h1>
+      <p style={{ margin: '14px 0 24px', color: '#555' }}>
+        Thank you for your purchase from <%= storeName %>. Your order has been placed and payment confirmed.
+      </p>
+      <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+        <Link to="/" style={{ padding: '10px 18px', background: '<%= theme.primary %>', color: '#fff', textDecoration: 'none', borderRadius: '4px' }}>
+          Continue Shopping
+        </Link>
+        <% if (has('orders')) { %>
+          <Link to="/orders" style={{ padding: '10px 18px', background: '#eee', color: '#333', textDecoration: 'none', borderRadius: '4px' }}>
+            View Order History
+          </Link>
+        <% } %>
+      </div>
+    </div>
+  );
+}

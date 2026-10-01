@@ -1,0 +1,139 @@
+import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
+import { request } from '../api';
+
+export default function Orders() {
+  const [orders, setOrders] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    const userStr = localStorage.getItem('user');
+    setIsLoggedIn(Boolean(token));
+    let email = '';
+    if (userStr) {
+      try {
+        email = JSON.parse(userStr)?.email || '';
+      } catch {}
+    }
+
+    request(`/orders/my-orders${email ? `?email=${encodeURIComponent(email)}` : ''}`)
+      .then((data) => {
+        setOrders(Array.isArray(data) ? data : []);
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  const getStatusColor = (status) => {
+    switch (status) {
+      case 'APPROVED':
+      case 'DELIVERED':
+        return { bg: '#dcfce7', text: '#15803d' };
+      case 'SHIPPED':
+      case 'PROCESSING':
+        return { bg: '#dbeafe', text: '#1d4ed8' };
+      case 'CANCELLED':
+        return { bg: '#fee2e2', text: '#b91c1c' };
+      default:
+        return { bg: '#fef3c7', text: '#b45309' };
+    }
+  };
+
+  return (
+    <div style={{ maxWidth: '860px', margin: '40px auto', padding: '0 20px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+        <div>
+          <h1 style={{ fontSize: '28px', margin: 0, color: '#0f172a' }}>Order History</h1>
+          <p style={{ margin: '4px 0 0', color: '#64748b', fontSize: '14px' }}>Review and track your recent store purchases</p>
+        </div>
+        <Link to="/" style={{ color: '<%= theme.primary %>', textDecoration: 'none', fontWeight: 600 }}>
+          ← Back to Shop
+        </Link>
+      </div>
+
+      {!isLoggedIn && (
+        <div style={{ padding: '16px', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '8px', marginBottom: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <strong>Guest Mode:</strong> Log in to sync and track all your past orders under your account.
+          </div>
+          <Link to="/login" style={{ padding: '6px 14px', background: '<%= theme.primary %>', color: '#fff', borderRadius: '4px', textDecoration: 'none', fontSize: '13px', fontWeight: 500 }}>
+            Log In
+          </Link>
+        </div>
+      )}
+
+      {loading ? (
+        <p style={{ textAlign: 'center', padding: '40px', color: '#64748b' }}>Loading your orders...</p>
+      ) : orders.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: '60px 20px', background: '#f8fafc', borderRadius: '12px', border: '1px dashed #cbd5e1' }}>
+          <span style={{ fontSize: '48px', display: 'block', marginBottom: '12px' }}>📋</span>
+          <h2 style={{ fontSize: '20px', color: '#334155', margin: '0 0 8px 0' }}>No orders found</h2>
+          <p style={{ color: '#64748b', margin: '0 0 20px 0' }}>You haven't placed any orders yet.</p>
+          <Link
+            to="/"
+            style={{
+              display: 'inline-block',
+              padding: '10px 20px',
+              background: '<%= theme.primary %>',
+              color: '#fff',
+              textDecoration: 'none',
+              borderRadius: '6px',
+              fontWeight: 600,
+            }}
+          >
+            Explore Catalog →
+          </Link>
+        </div>
+      ) : (
+        <div style={{ display: 'grid', gap: '20px' }}>
+          {orders.map((o) => {
+            const statusStyle = getStatusColor(o.status);
+            return (
+              <div
+                key={o._id}
+                style={{
+                  border: '1px solid #e2e8f0',
+                  borderRadius: '10px',
+                  background: '#ffffff',
+                  padding: '20px',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '10px', marginBottom: '14px', paddingBottom: '14px', borderBottom: '1px solid #f1f5f9' }}>
+                  <div>
+                    <strong style={{ fontSize: '16px', color: '#0f172a' }}>Order #{o._id.slice(-8).toUpperCase()}</strong>
+                    <div style={{ fontSize: '13px', color: '#64748b', marginTop: '2px' }}>
+                      Placed on {new Date(o.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
+                    </div>
+                  </div>
+                  <span style={{ padding: '4px 10px', borderRadius: '999px', fontSize: '12px', fontWeight: 600, background: statusStyle.bg, color: statusStyle.text }}>
+                    {o.status}
+                  </span>
+                </div>
+
+                {/* Items */}
+                <div style={{ display: 'grid', gap: '8px', marginBottom: '14px' }}>
+                  {(o.items || []).map((item, idx) => (
+                    <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px' }}>
+                      <span>{item.name} &times; {item.qty}</span>
+                      <span style={{ fontWeight: 500 }}><%= currency %>{(item.price || 0) * (item.qty || 1)}</span>
+                    </div>
+                  ))}
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '12px', borderTop: '1px solid #f1f5f9', fontSize: '15px' }}>
+                  <span style={{ color: '#64748b' }}>Recipient: {o.customerName} ({o.shippingAddress})</span>
+                  <span style={{ fontWeight: 'bold', fontSize: '18px', color: '<%= theme.primary %>' }}>
+                    <%= currency %>{o.totalAmount}
+                  </span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}

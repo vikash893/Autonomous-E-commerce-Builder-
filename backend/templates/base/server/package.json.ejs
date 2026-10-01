@@ -1,0 +1,11 @@
+{
+  "name": "<%= slug %>-server",
+  "version": "1.0.0",
+  "scripts": { "dev": "node --watch index.js", "start": "node index.js", "seed": "node scripts/seed.js" },
+  "dependencies": {
+    "cors": "^2.8.5", "dotenv": "^16.4.5", "express": "^4.19.2", "express-rate-limit": "^7.4.0",
+    "helmet": "^7.1.0", "mongoose": "^8.5.0"<% if (has('payments')) { %>,
+    "razorpay": "^2.9.6"<% } %><% if (has('auth')) { %>,
+    "bcryptjs": "^2.4.3", "jsonwebtoken": "^9.0.2"<% } %>
+  }
+}

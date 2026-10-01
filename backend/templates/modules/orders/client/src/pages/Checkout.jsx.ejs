@@ -1,0 +1,325 @@
+import { useState, useEffect } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
+import { request } from '../api';
+
+export default function Checkout() {
+  const navigate = useNavigate();
+  const [items, setItems] = useState([]);
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [address, setAddress] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const loadRazorpay = () => new Promise((resolve, reject) => {
+    if (window.Razorpay) {
+      resolve();
+      return;
+    }
+
+    const script = document.createElement('script');
+    script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+    script.onload = resolve;
+    script.onerror = () => reject(new Error('Unable to load the payment gateway'));
+    document.body.appendChild(script);
+  });
+
+<% if (has('coupons')) { %>
+  const [couponCode, setCouponCode] = useState('');
+  const [discount, setDiscount] = useState(0);
+  const [couponMsg, setCouponMsg] = useState('');
+  const [appliedCoupon, setAppliedCoupon] = useState('');
+  const [applyingCoupon, setApplyingCoupon] = useState(false);
+<% } %>
+
+  useEffect(() => {
+    const saved = localStorage.getItem('guest_cart');
+    if (saved) {
+      try {
+        setItems(JSON.parse(saved));
+      } catch {}
+    }
+
+    // Auto-populate user details if logged in
+    const userStr = localStorage.getItem('user');
+    if (userStr) {
+      try {
+        const u = JSON.parse(userStr);
+        if (u.name) setName(u.name);
+        if (u.email) setEmail(u.email);
+      } catch {}
+    }
+  }, []);
+
+  const subtotal = items.reduce(
+    (acc, item) => acc + (item.price || 0) * (item.qty || 1),
+    0
+  );
+
+  const total = Math.max(0, subtotal - (
+<% if (has('coupons')) { %>
+    discount
+<% } else { %>
+    0
+<% } %>
+  ));
+
+<% if (has('coupons')) { %>
+  const applyCoupon = async (e) => {
+    e.preventDefault();
+    if (!couponCode.trim()) return;
+    setApplyingCoupon(true);
+    setCouponMsg('');
+    try {
+      const res = await request('/coupons/apply', {
+        method: 'POST',
+        body: JSON.stringify({ code: couponCode.trim(), orderAmount: subtotal }),
+      });
+      setDiscount(res.discountAmount || 0);
+      setAppliedCoupon(res.code || couponCode.toUpperCase());
+      setCouponMsg(`✓ Coupon applied! Saved <%= currency %>${res.discountAmount}`);
+    } catch (err) {
+      setCouponMsg(`✗ ${err.message || 'Invalid coupon'}`);
+    } finally {
+      setApplyingCoupon(false);
+    }
+  };
+<% } %>
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (items.length === 0) {
+      setError('Your cart is empty');
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+
+    try {
+      const userStr = localStorage.getItem('user');
+      let loggedUser = null;
+      if (userStr) {
+        try { loggedUser = JSON.parse(userStr); } catch {}
+      }
+
+      const orderPayload = {
+        userId: loggedUser?.id || loggedUser?._id || undefined,
+        customerName: name,
+        customerEmail: email.trim(),
+        shippingAddress: address,
+        items: items.map((i) => ({
+          product: i._id,
+          name: i.name,
+          price: i.price,
+          qty: i.qty || 1,
+        })),
+        totalAmount: total,
+<% if (has('coupons')) { %>
+        couponCode: appliedCoupon || undefined,
+        discountAmount: discount,
+<% } %>
+      };
+
+<% if (has('payments')) { %>
+      const paymentOrder = await request('/payments/create-order', {
+        method: 'POST',
+        body: JSON.stringify(orderPayload),
+      });
+        await loadRazorpay();
+
+        await new Promise((resolve, reject) => {
+          const checkout = new window.Razorpay({
+            key: paymentOrder.key,
+            amount: paymentOrder.amount,
+            currency: paymentOrder.currency,
+            name: '<%= storeName %>',
+            description: 'Secure checkout payment',
+            order_id: paymentOrder.orderId,
+            prefill: { name, email },
+            theme: { color: '<%= theme.primary %>' },
+            handler: async (response) => {
+              try {
+                await request('/payments/verify', {
+                  method: 'POST',
+                  body: JSON.stringify(response),
+                });
+                resolve();
+              } catch (verificationError) {
+                reject(verificationError);
+              }
+            },
+            modal: { ondismiss: () => reject(new Error('Payment was cancelled')) },
+          });
+          checkout.open();
+        });
+        localStorage.removeItem('guest_cart');
+        navigate('/payment/success');
+<% } else { %>
+      await request('/orders', {
+        method: 'POST',
+        body: JSON.stringify(orderPayload),
+      });
+        localStorage.removeItem('guest_cart');
+        navigate('/orders');
+<% } %>
+    } catch (err) {
+      setError(err.message || 'Failed to place order');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (items.length === 0) {
+    return (
+      <div style={{ maxWidth: '600px', margin: '60px auto', textAlign: 'center', padding: '0 20px' }}>
+        <h2>Your cart is empty</h2>
+        <p style={{ color: '#64748b' }}>Please add products to your cart before proceeding to checkout.</p>
+        <Link to="/" style={{ color: '<%= theme.primary %>', fontWeight: 600 }}>← Return to Shop</Link>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ maxWidth: '960px', margin: '40px auto', padding: '0 20px' }}>
+      <h1 style={{ fontSize: '28px', margin: '0 0 24px 0', color: '#0f172a' }}>Complete Your Checkout</h1>
+
+      {error && (
+        <div style={{ padding: '12px', background: '#fee2e2', color: '#b91c1c', borderRadius: '6px', marginBottom: '20px' }}>
+          {error}
+        </div>
+      )}
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '40px', alignItems: 'start' }}>
+        {/* Shipping Form */}
+        <form onSubmit={handleSubmit} style={{ background: '#fff', padding: '24px', border: '1px solid #e2e8f0', borderRadius: '12px', display: 'grid', gap: '16px' }}>
+          <h2 style={{ fontSize: '18px', margin: '0 0 8px 0', color: '#0f172a' }}>1. Shipping Information</h2>
+
+          <div>
+            <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '4px', color: '#334155' }}>Full Name</label>
+            <input
+              required
+              placeholder="Full Name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              style={{ width: '100%', padding: '10px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', boxSizing: 'border-box' }}
+            />
+          </div>
+
+          <div>
+            <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '4px', color: '#334155' }}>Email Address</label>
+            <input
+              required
+              type="email"
+              placeholder="you@example.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              style={{ width: '100%', padding: '10px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', boxSizing: 'border-box' }}
+            />
+          </div>
+
+          <div>
+            <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '4px', color: '#334155' }}>Shipping Address</label>
+            <textarea
+              required
+              rows="3"
+              placeholder="Street, City, Postal Code, Country"
+              value={address}
+              onChange={(e) => setAddress(e.target.value)}
+              style={{ width: '100%', padding: '10px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', boxSizing: 'border-box' }}
+            />
+          </div>
+
+          <button
+            type="submit"
+            disabled={loading}
+            style={{
+              padding: '14px',
+              background: '<%= theme.primary %>',
+              color: '#fff',
+              border: 'none',
+              borderRadius: '8px',
+              fontSize: '16px',
+              fontWeight: 600,
+              cursor: loading ? 'not-allowed' : 'pointer',
+              marginTop: '12px',
+            }}
+          >
+            {loading ? 'Processing Order...' : 'Place Order & Pay →'}
+          </button>
+        </form>
+
+        {/* Order Summary & Coupon */}
+        <div style={{ background: '#f8fafc', padding: '24px', border: '1px solid #e2e8f0', borderRadius: '12px' }}>
+          <h2 style={{ fontSize: '18px', margin: '0 0 16px 0', color: '#0f172a' }}>2. Order Review ({items.length} items)</h2>
+
+          <div style={{ maxHeight: '220px', overflowY: 'auto', marginBottom: '20px' }}>
+            {items.map((i, idx) => (
+              <div key={i._id || idx} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #f1f5f9', fontSize: '14px' }}>
+                <div>
+                  <span style={{ fontWeight: 500 }}>{i.name}</span>
+                  <span style={{ color: '#64748b', marginLeft: '6px' }}>× {i.qty || 1}</span>
+                </div>
+                <span style={{ fontWeight: 600 }}><%= currency %>{(i.price || 0) * (i.qty || 1)}</span>
+              </div>
+            ))}
+          </div>
+
+<% if (has('coupons')) { %>
+          {/* Coupon Code Section */}
+          <div style={{ marginBottom: '20px', padding: '12px', background: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px' }}>
+            <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '6px', color: '#334155' }}>Have a Promo Code?</label>
+            <form onSubmit={applyCoupon} style={{ display: 'flex', gap: '8px' }}>
+              <input
+                type="text"
+                placeholder="e.g. WELCOME10"
+                value={couponCode}
+                onChange={(e) => setCouponCode(e.target.value)}
+                style={{ flex: 1, padding: '8px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px' }}
+              />
+              <button
+                type="submit"
+                disabled={applyingCoupon}
+                style={{ padding: '8px 14px', background: '#334155', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '13px' }}
+              >
+                Apply
+              </button>
+            </form>
+            {couponMsg && (
+              <div style={{ marginTop: '6px', fontSize: '12px', color: couponMsg.startsWith('✓') ? '#16a34a' : '#dc2626' }}>
+                {couponMsg}
+              </div>
+            )}
+          </div>
+<% } %>
+
+          <div style={{ display: 'grid', gap: '8px', color: '#64748b', fontSize: '14px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span>Subtotal</span>
+              <span><%= currency %>{subtotal}</span>
+            </div>
+<% if (has('coupons')) { %>
+            {discount > 0 && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', color: '#16a34a' }}>
+                <span>Discount ({appliedCoupon})</span>
+                <span>-<%= currency %>{discount}</span>
+              </div>
+            )}
+<% } %>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span>Shipping</span>
+              <span style={{ color: '#16a34a' }}>FREE</span>
+            </div>
+          </div>
+
+          <div style={{ height: '1px', background: '#e2e8f0', margin: '16px 0' }} />
+
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '20px', fontWeight: 'bold', color: '#0f172a' }}>
+            <span>Total to Pay</span>
+            <span style={{ color: '<%= theme.primary %>' }}><%= currency %>{total}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

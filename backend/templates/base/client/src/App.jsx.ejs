@@ -1,0 +1,258 @@
+import { useState, useEffect } from 'react';
+import { BrowserRouter, Routes, Route, Link, useNavigate } from 'react-router-dom';
+
+// @client-imports
+
+function AdminRoute({ children }) {
+  const userStr = localStorage.getItem('user');
+  const token = localStorage.getItem('token');
+
+  let user = null;
+
+  if (userStr && token) {
+    try {
+      user = JSON.parse(userStr);
+    } catch {}
+  }
+
+  if (!user || user.role !== 'ADMIN') {
+    return (
+      <div
+        style={{
+          maxWidth: '600px',
+          margin: '80px auto',
+          textAlign: 'center',
+          padding: '40px 24px',
+          background: '#ffffff',
+          borderRadius: '12px',
+          border: '1px solid #e2e8f0',
+          boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)',
+        }}
+      >
+        <div style={{ fontSize: '52px', marginBottom: '16px' }}>🔒</div>
+
+        <h2
+          style={{
+            fontSize: '24px',
+            color: '#0f172a',
+            margin: '0 0 10px 0',
+          }}
+        >
+          Admin Privileges Required
+        </h2>
+
+        <p
+          style={{
+            color: '#64748b',
+            margin: '0 0 24px 0',
+            lineHeight: '1.6',
+          }}
+        >
+          This page is restricted to administrators. You are currently
+          logged in as{' '}
+          {user ? (
+            <strong>
+              {user.name} ({user.role})
+            </strong>
+          ) : (
+            'a Guest'
+          )}
+          . Please sign in with an administrator account to continue.
+        </p>
+
+        <Link
+          to="/login"
+          style={{
+            display: 'inline-block',
+            padding: '12px 24px',
+            background: 'var(--primary, #4f46e5)',
+            color: '#fff',
+            textDecoration: 'none',
+            borderRadius: '6px',
+            fontWeight: 600,
+            fontSize: '15px',
+          }}
+        >
+          Sign In as Admin →
+        </Link>
+      </div>
+    );
+  }
+
+  return children;
+}
+
+function UserRoute({ children }) {
+  const userStr = localStorage.getItem('user');
+  const token = localStorage.getItem('token');
+
+  let user = null;
+
+  if (userStr && token) {
+    try {
+      user = JSON.parse(userStr);
+    } catch {}
+  }
+
+  if (!user) {
+    return (
+      <div
+        style={{
+          maxWidth: '500px',
+          margin: '80px auto',
+          textAlign: 'center',
+          padding: '40px 24px',
+          background: '#ffffff',
+          borderRadius: '12px',
+          border: '1px solid #e2e8f0',
+          boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)',
+        }}
+      >
+        <div style={{ fontSize: '48px', marginBottom: '16px' }}>🔑</div>
+
+        <h2
+          style={{
+            fontSize: '22px',
+            color: '#0f172a',
+            margin: '0 0 10px 0',
+          }}
+        >
+          Sign In Required
+        </h2>
+
+        <p
+          style={{
+            color: '#64748b',
+            margin: '0 0 20px 0',
+            lineHeight: '1.5',
+          }}
+        >
+          Please sign in to access your student/customer dashboard and
+          account details.
+        </p>
+
+        <Link
+          to="/login"
+          style={{
+            display: 'inline-block',
+            padding: '10px 22px',
+            background: 'var(--primary, #4f46e5)',
+            color: '#fff',
+            textDecoration: 'none',
+            borderRadius: '6px',
+            fontWeight: 600,
+            fontSize: '14px',
+          }}
+        >
+          Go to Sign In →
+        </Link>
+      </div>
+    );
+  }
+
+  // If administrator arrives on user route,
+  // redirect directly to admin control panel.
+  if (user.role === 'ADMIN') {
+    window.location.replace('/admin');
+    return null;
+  }
+
+  return children;
+}
+
+function NavigationBar() {
+  const [user, setUser] = useState(null);
+
+  useEffect(() => {
+    const userStr = localStorage.getItem('user');
+    const token = localStorage.getItem('token');
+
+    if (userStr && token) {
+      try {
+        setUser(JSON.parse(userStr));
+      } catch {}
+    }
+  }, []);
+
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+
+    setUser(null);
+
+    window.location.href = '/login';
+  };
+
+  const isAdmin = user?.role === 'ADMIN';
+
+  return (
+    <nav className="site-navbar">
+      <div className="navbar-container">
+        <Link to="/" className="navbar-brand">
+          <span className="brand-icon">✨</span>
+
+          <span className="brand-name">
+            <%= storeName %>
+          </span>
+        </Link>
+
+        <div className="navbar-links">
+          {/* @nav-links */}
+
+          {user ? (
+            <div className="user-menu">
+              <span
+                className="user-greeting"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '4px 10px',
+                  borderRadius: '999px',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  background: isAdmin ? '#e0e7ff' : '#f1f5f9',
+                  color: isAdmin ? '#4338ca' : '#334155',
+                }}
+              >
+                {isAdmin ? '👑 Admin' : '🎓 Student'}: {user.name}
+              </span>
+
+              <button
+                onClick={handleLogout}
+                className="logout-btn"
+              >
+                Logout
+              </button>
+            </div>
+          ) : null}
+        </div>
+      </div>
+    </nav>
+  );
+}
+
+export default function App() {
+  return (
+    <BrowserRouter>
+      <div className="app-shell">
+        <NavigationBar />
+
+        <main className="main-content">
+          <Routes>
+            {/* @routes */}
+          </Routes>
+        </main>
+
+        <footer className="site-footer">
+          <div className="footer-container">
+            <p>
+              © {new Date().getFullYear()} <%= storeName %> ·
+              Powered by Autonomous E-commerce Platform
+            </p>
+          </div>
+        </footer>
+      </div>
+    </BrowserRouter>
+  );
+}

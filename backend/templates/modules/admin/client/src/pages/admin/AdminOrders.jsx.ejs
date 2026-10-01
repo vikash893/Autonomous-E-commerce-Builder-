@@ -1,0 +1,361 @@
+import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
+import { request } from '../../api';
+
+export default function AdminOrders() {
+  const [orders, setOrders] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [filterStatus, setFilterStatus] = useState('');
+  const [search, setSearch] = useState('');
+  const [selectedOrder, setSelectedOrder] = useState(null);
+  const [feedback, setFeedback] = useState({ text: '', isError: false });
+
+  const notify = (text, isError = false) => {
+    setFeedback({ text, isError });
+    setTimeout(() => setFeedback({ text: '', isError: false }), 3500);
+  };
+
+  const loadOrders = () => {
+    setLoading(true);
+    request('/orders')
+      .then((data) => {
+        setOrders(Array.isArray(data) ? data : []);
+      })
+      .catch((err) => notify('Error loading orders: ' + err.message, true))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    loadOrders();
+  }, []);
+
+  // 1. UPDATE ORDER STATUS / PAYMENT STATUS
+  const handleUpdateStatus = async (id, status, paymentStatus) => {
+    try {
+      const body = {};
+      if (status) body.status = status;
+      if (paymentStatus) body.paymentStatus = paymentStatus;
+
+      await request(`/orders/${id}/status`, {
+        method: 'PATCH',
+        body: JSON.stringify(body),
+      });
+
+      setOrders(orders.map((o) => (o._id === id ? { ...o, ...body } : o)));
+      if (selectedOrder && selectedOrder._id === id) {
+        setSelectedOrder({ ...selectedOrder, ...body });
+      }
+      notify(`✓ Order #${id.slice(-6).toUpperCase()} status updated!`);
+    } catch (err) {
+      notify('Failed to update status: ' + err.message, true);
+    }
+  };
+
+  // 2. DELETE ORDER
+  const handleDeleteOrder = async (id) => {
+    if (!window.confirm(`Are you sure you want to permanently delete order #${id.slice(-6).toUpperCase()}?`)) return;
+    try {
+      await request(`/orders/${id}`, { method: 'DELETE' });
+      setOrders(orders.filter((o) => o._id !== id));
+      if (selectedOrder && selectedOrder._id === id) setSelectedOrder(null);
+      notify(`✓ Order deleted successfully.`);
+    } catch (err) {
+      notify('Failed to delete order: ' + err.message, true);
+    }
+  };
+
+  const filteredOrders = orders.filter((o) => {
+    const matchesSearch =
+      o.customerName?.toLowerCase().includes(search.toLowerCase()) ||
+      o.customerEmail?.toLowerCase().includes(search.toLowerCase()) ||
+      o._id?.toLowerCase().includes(search.toLowerCase());
+    const matchesStatus = !filterStatus || o.status === filterStatus;
+    return matchesSearch && matchesStatus;
+  });
+
+  const getStatusBadge = (status) => {
+    switch (status) {
+      case 'APPROVED':
+        return { bg: '#dcfce7', text: '#15803d' };
+      case 'DELIVERED':
+        return { bg: '#dcfce7', text: '#15803d' };
+      case 'SHIPPED':
+      case 'PROCESSING':
+        return { bg: '#dbeafe', text: '#1d4ed8' };
+      case 'CANCELLED':
+        return { bg: '#fee2e2', text: '#b91c1c' };
+      default:
+        return { bg: '#fef3c7', text: '#b45309' };
+    }
+  };
+
+  return (
+    <div style={{ maxWidth: '1100px', margin: '40px auto', padding: '0 20px' }}>
+      {/* Header */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px', marginBottom: '24px' }}>
+        <div>
+          <Link to="/admin" style={{ color: '#64748b', textDecoration: 'none', fontSize: '14px' }}>
+            ← Admin Overview
+          </Link>
+          <h1 style={{ fontSize: '28px', margin: '4px 0 0', color: '#0f172a' }}>Orders Administration & Fulfillment</h1>
+          <p style={{ margin: '4px 0 0', color: '#64748b', fontSize: '14px' }}>
+            Review customer orders, update tracking statuses, and handle cancellations
+          </p>
+        </div>
+      </div>
+
+      {/* Notification Toast */}
+      {feedback.text && (
+        <div style={{
+          padding: '12px 16px',
+          borderRadius: '8px',
+          marginBottom: '20px',
+          fontSize: '14px',
+          background: feedback.isError ? '#fef2f2' : '#f0fdf4',
+          color: feedback.isError ? '#b91c1c' : '#15803d',
+          border: `1px solid ${feedback.isError ? '#fecaca' : '#bbf7d0'}`,
+          display: 'flex',
+          justifyContent: 'space-between',
+        }}>
+          <span>{feedback.text}</span>
+          <button onClick={() => setFeedback({ text: '', isError: false })} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit' }}>×</button>
+        </div>
+      )}
+
+      {/* Search & Filter Controls */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', background: '#fff', padding: '16px 20px', borderRadius: '10px', border: '1px solid #e2e8f0', marginBottom: '24px' }}>
+        <input
+          type="text"
+          placeholder="Search by customer name, email, or order ID..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          style={{ flex: 1, minWidth: '260px', padding: '8px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '14px' }}
+        />
+        <select
+          value={filterStatus}
+          onChange={(e) => setFilterStatus(e.target.value)}
+          style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '14px', background: '#fff' }}
+        >
+          <option value="">All Statuses ({orders.length})</option>
+          <option value="PENDING">PENDING</option>
+          <option value="APPROVED">APPROVED</option>
+          <option value="PROCESSING">PROCESSING</option>
+          <option value="SHIPPED">SHIPPED</option>
+          <option value="DELIVERED">DELIVERED</option>
+          <option value="CANCELLED">CANCELLED</option>
+        </select>
+        <span style={{ fontSize: '13px', color: '#64748b' }}>
+          Showing <strong>{filteredOrders.length}</strong> orders
+        </span>
+      </div>
+
+      {/* Orders Table */}
+      {loading ? (
+        <p style={{ textAlign: 'center', padding: '60px', color: '#64748b' }}>Loading store orders...</p>
+      ) : filteredOrders.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: '60px 20px', background: '#f8fafc', borderRadius: '12px', border: '1px dashed #cbd5e1' }}>
+          <span style={{ fontSize: '48px', display: 'block', marginBottom: '8px' }}>📋</span>
+          <h3 style={{ margin: '0 0 8px 0', color: '#334155' }}>No orders found</h3>
+          <p style={{ color: '#64748b' }}>Customers haven't placed orders matching this filter.</p>
+        </div>
+      ) : (
+        <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '14px' }}>
+            <thead>
+              <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', color: '#64748b', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                <th style={{ padding: '14px 18px' }}>Order ID</th>
+                <th style={{ padding: '14px 18px' }}>Customer</th>
+                <th style={{ padding: '14px 18px' }}>Date</th>
+                <th style={{ padding: '14px 18px' }}>Total</th>
+                <th style={{ padding: '14px 18px' }}>Payment</th>
+                <th style={{ padding: '14px 18px' }}>Order Status</th>
+                <th style={{ padding: '14px 18px', textAlign: 'right' }}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredOrders.map((o) => {
+                const badge = getStatusBadge(o.status);
+                return (
+                  <tr key={o._id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                    <td style={{ padding: '14px 18px', fontWeight: 600, color: '#0f172a' }}>
+                      #{o._id.slice(-8).toUpperCase()}
+                    </td>
+                    <td style={{ padding: '14px 18px' }}>
+                      <div style={{ fontWeight: 600, color: '#0f172a' }}>{o.customerName || 'Anonymous'}</div>
+                      <div style={{ fontSize: '12px', color: '#64748b' }}>{o.customerEmail}</div>
+                    </td>
+                    <td style={{ padding: '14px 18px', color: '#64748b', fontSize: '13px' }}>
+                      {new Date(o.createdAt).toLocaleDateString()}
+                    </td>
+                    <td style={{ padding: '14px 18px', fontWeight: 600, color: 'var(--primary, #4f46e5)', fontSize: '15px' }}>
+                      <%= currency %>{o.totalAmount}
+                    </td>
+                    <td style={{ padding: '14px 18px' }}>
+<% if (has('payments')) { %>
+                      <span style={{ fontSize: '12px', fontWeight: 600, color: o.paymentStatus === 'PAID' ? '#15803d' : '#b45309' }}>
+                        {o.paymentStatus || 'PENDING'}
+                      </span>
+<% } else { %>
+                      <select
+                        value={o.paymentStatus || 'PENDING'}
+                        onChange={(e) => handleUpdateStatus(o._id, null, e.target.value)}
+                        style={{
+                          padding: '4px 8px',
+                          borderRadius: '6px',
+                          border: '1px solid #cbd5e1',
+                          fontSize: '12px',
+                          fontWeight: 600,
+                          background: o.paymentStatus === 'PAID' ? '#dcfce7' : '#fef3c7',
+                          color: o.paymentStatus === 'PAID' ? '#15803d' : '#b45309',
+                        }}
+                      >
+                        <option value="PENDING">PENDING</option>
+                        <option value="PAID">PAID</option>
+                        <option value="FAILED">FAILED</option>
+                      </select>
+<% } %>
+                    </td>
+                    <td style={{ padding: '14px 18px' }}>
+                      <select
+                        value={o.status || 'PENDING'}
+                        onChange={(e) => handleUpdateStatus(o._id, e.target.value, null)}
+                        style={{
+                          padding: '4px 10px',
+                          borderRadius: '6px',
+                          border: '1px solid #cbd5e1',
+                          fontSize: '12px',
+                          fontWeight: 600,
+                          background: badge.bg,
+                          color: badge.text,
+                        }}
+                      >
+                        <option value="PENDING">PENDING</option>
+                        <option value="APPROVED">APPROVED</option>
+                        <option value="PROCESSING">PROCESSING</option>
+                        <option value="SHIPPED">SHIPPED</option>
+                        <option value="DELIVERED">DELIVERED</option>
+                        <option value="CANCELLED">CANCELLED</option>
+                      </select>
+                    </td>
+                    <td style={{ padding: '14px 18px', textAlign: 'right' }}>
+                      <div style={{ display: 'inline-flex', gap: '8px' }}>
+                        {o.status === 'PENDING' && (
+                          <button
+                            onClick={() => handleUpdateStatus(o._id, 'APPROVED', null)}
+                            style={{
+                              padding: '6px 12px',
+                              background: '#dcfce7',
+                              color: '#15803d',
+                              border: '1px solid #86efac',
+                              borderRadius: '6px',
+                              fontSize: '12px',
+                              fontWeight: 600,
+                              cursor: 'pointer',
+                            }}
+                            title="Quick Approve Order"
+                          >
+                            ✓ Approve
+                          </button>
+                        )}
+                        <button
+                          onClick={() => setSelectedOrder(o)}
+                          style={{
+                            padding: '6px 12px',
+                            background: '#f1f5f9',
+                            color: '#334155',
+                            border: 'none',
+                            borderRadius: '6px',
+                            fontSize: '12px',
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                          }}
+                        >
+                          👁️ View
+                        </button>
+                        <button
+                          onClick={() => handleDeleteOrder(o._id)}
+                          style={{
+                            padding: '6px 12px',
+                            background: '#fee2e2',
+                            color: '#dc2626',
+                            border: 'none',
+                            borderRadius: '6px',
+                            fontSize: '12px',
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                          }}
+                        >
+                          🗑️ Delete
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* VIEW ORDER DETAILS MODAL */}
+      {selectedOrder && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(15, 23, 42, 0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' }}>
+          <div style={{ background: '#fff', borderRadius: '14px', width: '100%', maxWidth: '560px', padding: '28px', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)', maxHeight: '90vh', overflowY: 'auto' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <div>
+                <h2 style={{ fontSize: '20px', margin: 0, color: '#0f172a' }}>
+                  Order #{selectedOrder._id.slice(-8).toUpperCase()}
+                </h2>
+                <span style={{ fontSize: '13px', color: '#64748b' }}>
+                  Placed on {new Date(selectedOrder.createdAt).toLocaleString()}
+                </span>
+              </div>
+              <button onClick={() => setSelectedOrder(null)} style={{ background: 'none', border: 'none', fontSize: '22px', cursor: 'pointer', color: '#64748b' }}>×</button>
+            </div>
+
+            {/* Customer Details */}
+            <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid #e2e8f0', marginBottom: '20px' }}>
+              <h3 style={{ fontSize: '14px', textTransform: 'uppercase', color: '#64748b', margin: '0 0 8px 0', letterSpacing: '0.05em' }}>Customer & Shipping Details</h3>
+              <p style={{ margin: '0 0 4px 0', fontWeight: 600, color: '#0f172a' }}>{selectedOrder.customerName}</p>
+              <p style={{ margin: '0 0 4px 0', color: '#64748b', fontSize: '14px' }}>📧 {selectedOrder.customerEmail}</p>
+              <p style={{ margin: '0', color: '#64748b', fontSize: '14px' }}>📍 {selectedOrder.shippingAddress}</p>
+            </div>
+
+            {/* Order Items */}
+            <div style={{ marginBottom: '20px' }}>
+              <h3 style={{ fontSize: '14px', textTransform: 'uppercase', color: '#64748b', margin: '0 0 10px 0', letterSpacing: '0.05em' }}>
+                Purchased Items ({selectedOrder.items?.length || 0})
+              </h3>
+              <div style={{ border: '1px solid #e2e8f0', borderRadius: '8px', overflow: 'hidden' }}>
+                {(selectedOrder.items || []).map((item, idx) => (
+                  <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 14px', borderBottom: idx === selectedOrder.items.length - 1 ? 'none' : '1px solid #f1f5f9', fontSize: '14px' }}>
+                    <div>
+                      <span style={{ fontWeight: 500 }}>{item.name}</span>
+                      <span style={{ color: '#64748b', marginLeft: '6px' }}>× {item.qty}</span>
+                    </div>
+                    <span style={{ fontWeight: 600 }}><%= currency %>{(item.price || 0) * (item.qty || 1)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 0', borderTop: '2px solid #e2e8f0', marginBottom: '20px', fontSize: '18px', fontWeight: 'bold' }}>
+              <span>Total Paid / Due:</span>
+              <span style={{ color: 'var(--primary, #4f46e5)' }}><%= currency %>{selectedOrder.totalAmount}</span>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+              <button
+                type="button"
+                onClick={() => setSelectedOrder(null)}
+                style={{ padding: '9px 18px', background: 'var(--primary, #4f46e5)', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 600 }}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

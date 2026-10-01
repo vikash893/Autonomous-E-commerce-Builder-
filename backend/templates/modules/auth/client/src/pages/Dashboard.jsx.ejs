@@ -1,0 +1,238 @@
+import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
+import { request } from '../api';
+
+export default function Dashboard() {
+  const [user, setUser] = useState(null);
+  const [orders, setOrders] = useState([]);
+  const [cartCount, setCartCount] = useState(0);
+  const [wishlistCount, setWishlistCount] = useState(0);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    // 1. Load User Profile from localStorage
+    let currentUser = null;
+    const userStr = localStorage.getItem('user');
+    if (userStr) {
+      try {
+        currentUser = JSON.parse(userStr);
+        setUser(currentUser);
+        if (currentUser.role === 'ADMIN') {
+          window.location.replace('/admin');
+          return;
+        }
+      } catch {}
+    }
+
+    // 2. Load Cart Count
+    try {
+      const savedCart = localStorage.getItem('guest_cart');
+      if (savedCart) {
+        const parsed = JSON.parse(savedCart);
+        setCartCount(Array.isArray(parsed) ? parsed.reduce((sum, i) => sum + (i.qty || 1), 0) : 0);
+      }
+    } catch {}
+
+    // 3. Load User Orders
+<% if (has('orders')) { %>
+    const userEmail = currentUser?.email || '';
+    request(`/orders/my-orders${userEmail ? `?email=${encodeURIComponent(userEmail)}` : ''}`)
+      .then((data) => {
+        setOrders(Array.isArray(data) ? data : []);
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+<% } else { %>
+    setLoading(false);
+<% } %>
+
+    // 4. Load Wishlist Count
+<% if (has('wishlist')) { %>
+    request('/wishlist')
+      .then((data) => {
+        setWishlistCount(data?.products?.length || 0);
+      })
+      .catch(() => {});
+<% } %>
+  }, []);
+
+  const isAdmin = user?.role === 'ADMIN';
+
+  return (
+    <div style={{ maxWidth: '1000px', margin: '40px auto', padding: '0 20px' }}>
+      {/* If Admin visits User Dashboard, show direct shortcut */}
+      {isAdmin && (
+        <div style={{ padding: '16px 20px', background: '#e0e7ff', border: '1px solid #c7d2fe', borderRadius: '10px', marginBottom: '28px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+          <div>
+            <strong style={{ color: '#3730a3', fontSize: '15px' }}>👑 Administrator Account Detected</strong>
+            <p style={{ margin: '2px 0 0', color: '#4338ca', fontSize: '13px' }}>
+              You are viewing the Student/Customer view. Access the full store administration control panel here:
+            </p>
+          </div>
+          <Link
+            to="/admin"
+            style={{
+              padding: '8px 18px',
+              background: 'var(--primary, #4f46e5)',
+              color: '#fff',
+              borderRadius: '6px',
+              textDecoration: 'none',
+              fontWeight: 600,
+              fontSize: '13px',
+            }}
+          >
+            Open Admin Dashboard →
+          </Link>
+        </div>
+      )}
+
+      {/* User Welcome Banner */}
+      <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '28px', marginBottom: '28px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
+          <div>
+            <span style={{ display: 'inline-block', padding: '4px 10px', borderRadius: '999px', fontSize: '12px', fontWeight: 600, background: isAdmin ? '#e0e7ff' : '#dcfce7', color: isAdmin ? '#4338ca' : '#15803d', marginBottom: '8px' }}>
+              {isAdmin ? '👑 Store Administrator' : '🎓 Student / Customer Account'}
+            </span>
+            <h1 style={{ fontSize: '28px', margin: '0 0 6px 0', color: '#0f172a' }}>
+              Hello, {user?.name || 'Customer'}!
+            </h1>
+            <p style={{ margin: 0, color: '#64748b', fontSize: '14px' }}>
+              📧 {user?.email || 'Logged in user'} · Member of <%= storeName %>
+            </p>
+          </div>
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <Link
+              to="/"
+              style={{
+                padding: '10px 18px',
+                background: 'var(--primary, #4f46e5)',
+                color: '#fff',
+                textDecoration: 'none',
+                borderRadius: '8px',
+                fontWeight: 600,
+                fontSize: '14px',
+              }}
+            >
+              🛍️ Explore Catalog
+            </Link>
+          </div>
+        </div>
+      </div>
+
+      {/* Customer Quick Stat Cards */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '32px' }}>
+        <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '20px' }}>
+          <span style={{ fontSize: '12px', textTransform: 'uppercase', color: '#64748b', fontWeight: 600 }}>Total Orders</span>
+          <p style={{ fontSize: '28px', fontWeight: 'bold', margin: '8px 0 4px', color: '#0f172a' }}>{orders.length}</p>
+          <Link to="/orders" style={{ fontSize: '12px', color: 'var(--primary, #4f46e5)', textDecoration: 'none', fontWeight: 500 }}>
+            View order history →
+          </Link>
+        </div>
+
+        <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '20px' }}>
+          <span style={{ fontSize: '12px', textTransform: 'uppercase', color: '#64748b', fontWeight: 600 }}>Items in Cart</span>
+          <p style={{ fontSize: '28px', fontWeight: 'bold', margin: '8px 0 4px', color: 'var(--primary, #4f46e5)' }}>{cartCount}</p>
+          <Link to="/cart" style={{ fontSize: '12px', color: 'var(--primary, #4f46e5)', textDecoration: 'none', fontWeight: 500 }}>
+            Proceed to checkout →
+          </Link>
+        </div>
+
+<% if (has('wishlist')) { %>
+        <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '20px' }}>
+          <span style={{ fontSize: '12px', textTransform: 'uppercase', color: '#64748b', fontWeight: 600 }}>Saved Wishlist</span>
+          <p style={{ fontSize: '28px', fontWeight: 'bold', margin: '8px 0 4px', color: '#ec4899' }}>{wishlistCount}</p>
+          <Link to="/wishlist" style={{ fontSize: '12px', color: 'var(--primary, #4f46e5)', textDecoration: 'none', fontWeight: 500 }}>
+            Inspect saved items →
+          </Link>
+        </div>
+<% } %>
+
+        <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '20px' }}>
+          <span style={{ fontSize: '12px', textTransform: 'uppercase', color: '#64748b', fontWeight: 600 }}>Account Security</span>
+          <p style={{ fontSize: '18px', fontWeight: 'bold', margin: '14px 0 6px', color: '#16a34a' }}>✓ Active</p>
+          <span style={{ fontSize: '12px', color: '#64748b' }}>JWT Session Protected</span>
+        </div>
+      </div>
+
+      {/* Recent Purchases Section */}
+<% if (has('orders')) { %>
+      <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '24px', marginBottom: '32px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px' }}>
+          <h2 style={{ fontSize: '18px', margin: 0, color: '#0f172a' }}>My Recent Orders</h2>
+          <Link to="/orders" style={{ fontSize: '13px', color: 'var(--primary, #4f46e5)', textDecoration: 'none', fontWeight: 600 }}>
+            All Orders ({orders.length}) →
+          </Link>
+        </div>
+
+        {loading ? (
+          <p style={{ color: '#64748b', textAlign: 'center', padding: '30px 0' }}>Loading orders...</p>
+        ) : orders.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '40px 20px', background: '#f8fafc', borderRadius: '8px', border: '1px dashed #cbd5e1' }}>
+            <p style={{ color: '#64748b', margin: '0 0 12px 0' }}>You haven't placed any orders yet.</p>
+            <Link
+              to="/"
+              style={{ padding: '8px 16px', background: 'var(--primary, #4f46e5)', color: '#fff', borderRadius: '6px', textDecoration: 'none', fontSize: '13px', fontWeight: 500 }}
+            >
+              Start Shopping Now
+            </Link>
+          </div>
+        ) : (
+          <div style={{ display: 'grid', gap: '14px' }}>
+            {orders.slice(0, 3).map((o) => (
+              <div
+                key={o._id}
+                style={{
+                  border: '1px solid #e2e8f0',
+                  borderRadius: '8px',
+                  padding: '16px',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  flexWrap: 'wrap',
+                  gap: '12px',
+                }}
+              >
+                <div>
+                  <strong style={{ color: '#0f172a' }}>Order #{o._id.slice(-6).toUpperCase()}</strong>
+                  <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>
+                    {o.items?.length || 0} item(s) · {new Date(o.createdAt).toLocaleDateString()}
+                  </div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                  <span style={{ fontWeight: 600, color: '#0f172a' }}><%= currency %>{o.totalAmount}</span>
+                  <span style={{ padding: '3px 8px', borderRadius: '999px', fontSize: '11px', fontWeight: 600, background: o.status === 'DELIVERED' || o.status === 'APPROVED' ? '#dcfce7' : '#fef3c7', color: o.status === 'DELIVERED' || o.status === 'APPROVED' ? '#15803d' : '#b45309' }}>
+                    {o.status}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+<% } %>
+
+      {/* Quick Customer Shortcuts */}
+      <div style={{ background: '#f8fafc', padding: '20px 24px', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+        <h3 style={{ fontSize: '15px', margin: '0 0 12px 0', color: '#334155' }}>Quick Navigation</h3>
+        <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+          <Link to="/" style={{ padding: '8px 14px', background: '#fff', border: '1px solid #cbd5e1', borderRadius: '6px', textDecoration: 'none', color: '#334155', fontSize: '13px', fontWeight: 500 }}>
+            📦 Products Catalog
+          </Link>
+          <Link to="/cart" style={{ padding: '8px 14px', background: '#fff', border: '1px solid #cbd5e1', borderRadius: '6px', textDecoration: 'none', color: '#334155', fontSize: '13px', fontWeight: 500 }}>
+            🛒 My Cart ({cartCount})
+          </Link>
+<% if (has('wishlist')) { %>
+          <Link to="/wishlist" style={{ padding: '8px 14px', background: '#fff', border: '1px solid #cbd5e1', borderRadius: '6px', textDecoration: 'none', color: '#334155', fontSize: '13px', fontWeight: 500 }}>
+            ❤️ My Wishlist ({wishlistCount})
+          </Link>
+<% } %>
+<% if (has('orders')) { %>
+          <Link to="/orders" style={{ padding: '8px 14px', background: '#fff', border: '1px solid #cbd5e1', borderRadius: '6px', textDecoration: 'none', color: '#334155', fontSize: '13px', fontWeight: 500 }}>
+            📋 Order History
+          </Link>
+<% } %>
+        </div>
+      </div>
+    </div>
+  );
+}
