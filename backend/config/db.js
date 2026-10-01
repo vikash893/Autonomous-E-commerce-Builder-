@@ -1,22 +1,22 @@
 const mongoose = require("mongoose");
+const dns = require("dns");
 
-const connectDB = async () => {
+dns.setServers(["8.8.8.8", "8.8.4.4"]);
+
+const connectDb = async () => {
+    const mongoUrl = process.env.MONGO_URL || "mongodb://127.0.0.1:27017/ecom_database";
     try {
-        const connection = await mongoose.connect(
-            process.env.MONGO_URI
-        );
-
-        console.log(
-            `MongoDB connected: ${connection.connection.host}`
-        );
+        await mongoose.connect(mongoUrl, {
+            maxPoolSize: 50,
+            minPoolSize: 10,
+            serverSelectionTimeoutMS: 8000,
+            socketTimeoutMS: 45000,
+            autoIndex: true
+        });
+        console.log("MongoDB connected successfully with connection pooling (maxPoolSize: 50).");
     } catch (error) {
-        console.error(
-            "MongoDB connection error:",
-            error.message
-        );
-
-        process.exit(1);
+        console.error("⚠️ MongoDB connection error:", error.message);
     }
 };
 
-module.exports = connectDB;
+module.exports = connectDb;
